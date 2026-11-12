@@ -73,3 +73,16 @@
 .icon:hover {
   color: var(--text);
 }
+
+.signOut {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  transition: color 0.15s;
+}
+
+.signOut:hover {
+  color: var(--text);
+}

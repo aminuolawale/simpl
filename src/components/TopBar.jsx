@@ -1,8 +1,11 @@
 import { usePdf } from '../context/PdfContext'
+import { supabase } from '../lib/supabase'
 import styles from './TopBar.module.css'
 
 export default function TopBar({ drawerOpen, onToggleDrawer, onClose }) {
   const { currentPage, pageCount, fileName } = usePdf()
+
+  const signOut = () => supabase.auth.signOut()
 
   return (
     <header className={styles.bar}>
@@ -25,6 +28,9 @@ export default function TopBar({ drawerOpen, onToggleDrawer, onClose }) {
         )}
         <button className={styles.icon} onClick={onClose} title="Close">
           <CloseIcon />
+        </button>
+        <button className={styles.signOut} onClick={signOut} title="Sign out">
+          Sign out
         </button>
       </div>
     </header>
