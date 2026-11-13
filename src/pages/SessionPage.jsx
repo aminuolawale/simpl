@@ -91,7 +91,12 @@ export default function SessionPage() {
           <NoteEditor sessionId={sessionId} initialContent={note?.content} />
         </div>
       </div>
-      <BottomBar onToggleDrawer={() => setDrawerOpen(o => !o)} drawerOpen={drawerOpen} />
+      <BottomBar
+        onToggleDrawer={() => setDrawerOpen(o => !o)}
+        drawerOpen={drawerOpen}
+        startPage={session?.start_page}
+        endPage={session?.end_page}
+      />
     </div>
   )
 }

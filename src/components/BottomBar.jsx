@@ -1,7 +1,7 @@
 import { usePdf } from '../context/PdfContext'
 import styles from './BottomBar.module.css'
 
-export default function BottomBar({ onToggleDrawer, drawerOpen }) {
+export default function BottomBar({ onToggleDrawer, drawerOpen, startPage, endPage }) {
   const { currentPage, pageCount, scale, zoomIn, zoomOut } = usePdf()
 
   const goTo = (pageNum) => {
@@ -20,6 +20,16 @@ export default function BottomBar({ onToggleDrawer, drawerOpen }) {
         {onToggleDrawer && (
           <button className={styles.tocBtn} onClick={onToggleDrawer} title="Table of contents">
             <HamburgerIcon open={drawerOpen} />
+          </button>
+        )}
+        {startPage && (
+          <button className={styles.jumpBtn} onClick={() => goTo(startPage)} title={`Jump to start (p. ${startPage})`}>
+            Start
+          </button>
+        )}
+        {endPage && (
+          <button className={styles.jumpBtn} onClick={() => goTo(endPage)} title={`Jump to end (p. ${endPage})`}>
+            End
           </button>
         )}
       </div>
