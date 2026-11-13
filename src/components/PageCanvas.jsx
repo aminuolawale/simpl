@@ -3,7 +3,7 @@ import { usePdf } from '../context/PdfContext'
 import styles from './PageCanvas.module.css'
 
 export default function PageCanvas() {
-  const { pdfDoc, pageCount, scale, setCurrentPage } = usePdf()
+  const { pdfDoc, pageCount, scale, setCurrentPage, initialPage } = usePdf()
   const containerRef = useRef(null)
   const observerRef = useRef(null)
   const renderingRef = useRef({})
@@ -55,11 +55,17 @@ export default function PageCanvas() {
           wrapper.style.height = `${viewport.height}px`
         }
       }
+
+      // Scroll to the session's starting page once sizes are known
+      if (!cancelled && initialPage > 1) {
+        const el = document.getElementById(`pdf-page-${initialPage}`)
+        if (el) el.scrollIntoView({ block: 'start' })
+      }
     }
 
     presizeAll()
     return () => { cancelled = true }
-  }, [pdfDoc, scale, pageCount])
+  }, [pdfDoc, scale, pageCount, initialPage])
 
   // Clear canvases and reset render flags when scale changes
   useEffect(() => {
@@ -78,7 +84,6 @@ export default function PageCanvas() {
   useEffect(() => {
     if (!pdfDoc) return
 
-    // Track intersection ratios for all pages so we can pick the most visible
     const ratioMap = {}
 
     observerRef.current?.disconnect()
@@ -90,7 +95,6 @@ export default function PageCanvas() {
           if (entry.isIntersecting) renderPage(pageNum)
         })
 
-        // Pick the page with the highest visibility
         let best = null
         let bestRatio = 0
         Object.entries(ratioMap).forEach(([num, ratio]) => {

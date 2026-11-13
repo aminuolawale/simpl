@@ -1,0 +1,85 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.btn {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--muted);
+  padding: 3px 7px;
+  transition: color 0.15s;
+  border-radius: 2px;
+}
+
+.btn:hover {
+  color: var(--text);
+}
+
+.btn.active {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.status {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+  letter-spacing: 0.03em;
+}
+
+.editor {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.editor :global(.ProseMirror) {
+  outline: none;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--text);
+  min-height: 100%;
+}
+
+.editor :global(.ProseMirror p) {
+  margin-bottom: 0.8em;
+}
+
+.editor :global(.ProseMirror ul) {
+  padding-left: 1.4em;
+  margin-bottom: 0.8em;
+}
+
+.editor :global(.ProseMirror li) {
+  margin-bottom: 0.3em;
+}
+
+.editor :global(.ProseMirror strong) {
+  font-weight: 500;
+}
+
+.editor :global(.ProseMirror p.is-editor-empty:first-child::before) {
+  content: 'Begin your notes…';
+  color: var(--muted);
+  font-style: italic;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}

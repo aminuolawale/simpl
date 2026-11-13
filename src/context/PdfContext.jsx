@@ -35,6 +35,7 @@ export function PdfProvider({ children }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [scale, setScale] = useState(1.2)
   const [fileName, setFileName] = useState('')
+  const [initialPage, setInitialPage] = useState(1)
 
   const loadPdf = useCallback(async (file) => {
     const arrayBuffer = await file.arrayBuffer()
@@ -45,7 +46,23 @@ export function PdfProvider({ children }) {
     setOutline(resolved)
     setPageCount(pdf.numPages)
     setCurrentPage(1)
+    setInitialPage(1)
     setFileName(file.name)
+  }, [])
+
+  const loadPdfFromUrl = useCallback(async (url, startPage = 1, existingOutline = null) => {
+    const pdf = await pdfjsLib.getDocument({ url }).promise
+    let resolved = existingOutline
+    if (!resolved) {
+      const rawOutline = await pdf.getOutline()
+      resolved = await resolveOutline(pdf, rawOutline)
+    }
+    setPdfDoc(pdf)
+    setOutline(resolved ?? [])
+    setPageCount(pdf.numPages)
+    setCurrentPage(startPage)
+    setInitialPage(startPage)
+    setFileName('')
   }, [])
 
   const zoomIn  = useCallback(() => setScale(s => Math.min(s + 0.2, 3)), [])
@@ -54,7 +71,7 @@ export function PdfProvider({ children }) {
   return (
     <PdfContext.Provider value={{
       pdfDoc, outline, pageCount, currentPage, setCurrentPage,
-      scale, zoomIn, zoomOut, loadPdf, fileName,
+      scale, zoomIn, zoomOut, loadPdf, loadPdfFromUrl, fileName, initialPage,
     }}>
       {children}
     </PdfContext.Provider>

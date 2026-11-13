@@ -9,6 +9,24 @@
   flex-shrink: 0;
 }
 
+.left {
+  display: flex;
+  align-items: center;
+  min-width: 32px;
+}
+
+.tocBtn {
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  transition: color 0.15s;
+}
+
+.tocBtn:hover {
+  color: var(--text);
+}
+
 .nav {
   display: flex;
   align-items: center;
