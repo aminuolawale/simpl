@@ -95,55 +95,6 @@
   color: var(--muted);
 }
 
-/* OR divider */
-
-.orRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-}
-
-.orLine {
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-.orLabel {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 300;
-  color: var(--muted);
-  letter-spacing: 0.06em;
-}
-
-/* Google button */
-
-.google {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 0;
-  border: 1px solid var(--border);
-  font-family: var(--font-serif);
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--text);
-  background: transparent;
-  letter-spacing: 0.01em;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.google:hover {
-  border-color: var(--text);
-  background: var(--surface);
-}
-
-/* Post-submit state */
-
 .check {
   display: flex;
   flex-direction: column;
