@@ -45,21 +45,35 @@ export default function PageCanvas() {
     let cancelled = false
 
     const presizeAll = async () => {
+      // One getPage call — apply its dimensions to every wrapper immediately
+      const firstPage = await pdfDoc.getPage(1)
+      if (cancelled) return
+      const { width, height } = firstPage.getViewport({ scale })
       for (let i = 1; i <= pageCount; i++) {
-        if (cancelled) return
-        const page = await pdfDoc.getPage(i)
-        const viewport = page.getViewport({ scale })
         const wrapper = document.getElementById(`pdf-page-${i}`)
         if (wrapper) {
-          wrapper.style.width = `${viewport.width}px`
-          wrapper.style.height = `${viewport.height}px`
+          wrapper.style.width = `${width}px`
+          wrapper.style.height = `${height}px`
         }
       }
 
-      // Scroll to the session's starting page once sizes are known
+      // Scroll now — layout is accurate enough for uniform PDFs
       if (!cancelled && initialPage > 1) {
         const el = document.getElementById(`pdf-page-${initialPage}`)
         if (el) el.scrollIntoView({ block: 'start' })
+      }
+
+      // Background pass: correct pages whose dimensions differ from page 1
+      for (let i = 2; i <= pageCount; i++) {
+        if (cancelled) return
+        const page = await pdfDoc.getPage(i)
+        const vp = page.getViewport({ scale })
+        if (vp.width === width && vp.height === height) continue
+        const wrapper = document.getElementById(`pdf-page-${i}`)
+        if (wrapper) {
+          wrapper.style.width = `${vp.width}px`
+          wrapper.style.height = `${vp.height}px`
+        }
       }
     }
 

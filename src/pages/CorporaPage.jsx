@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
 import styles from './CorporaPage.module.css'
 
 export default function CorporaPage() {
+  const navigate = useNavigate()
   const [corpora, setCorpora] = useState([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -38,9 +39,14 @@ export default function CorporaPage() {
     <div className={styles.root}>
       <AppBar
         actions={
-          <button className={styles.action} onClick={() => setCreating(true)}>
-            + New corpus
-          </button>
+          <div className={styles.actions}>
+            <button className={styles.action} onClick={() => navigate('/study/new')}>
+              + New study
+            </button>
+            <button className={styles.action} onClick={() => setCreating(true)}>
+              + New corpus
+            </button>
+          </div>
         }
       />
       <main className={styles.main}>

@@ -6,7 +6,7 @@ import { usePdf } from '../context/PdfContext'
 import AppBar from '../components/AppBar'
 import TocDrawer from '../components/TocDrawer'
 import PageCanvas from '../components/PageCanvas'
-import BottomBar from '../components/BottomBar'
+import SessionDock from '../components/SessionDock'
 import NoteEditor from '../components/NoteEditor'
 import styles from './SessionPage.module.css'
 
@@ -43,14 +43,13 @@ export default function SessionPage() {
       setStudy(studyData)
       setCorpus(corpusData)
       setNote(noteData)
+      setLoading(false) // show UI immediately — PDF loads in background below
 
       const storagePath = sessionData?.studies?.resources?.storage_path
       if (storagePath) {
         const url = await getSignedUrl(supabase, storagePath)
-        await loadPdfFromUrl(url, sessionData.start_page, sessionData?.studies?.resources?.outline)
+        loadPdfFromUrl(url, sessionData.start_page, sessionData?.studies?.resources?.outline)
       }
-
-      setLoading(false)
     }
     init()
   }, [sessionId])
@@ -91,9 +90,9 @@ export default function SessionPage() {
           <NoteEditor sessionId={sessionId} initialContent={note?.content} />
         </div>
       </div>
-      <BottomBar
-        onToggleDrawer={() => setDrawerOpen(o => !o)}
+      <SessionDock
         drawerOpen={drawerOpen}
+        onToggleDrawer={() => setDrawerOpen(o => !o)}
         startPage={session?.start_page}
         endPage={session?.end_page}
       />

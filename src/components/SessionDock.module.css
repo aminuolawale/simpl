@@ -1,0 +1,106 @@
+.dock {
+  position: relative;
+  flex-shrink: 0;
+  height: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  transition: height 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dock.open {
+  height: 44px;
+}
+
+/* Collapsed pill handle */
+.handle {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 2px;
+  background: var(--border);
+  border-radius: 1px;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.dock.open .handle {
+  opacity: 0;
+}
+
+/* Controls row */
+.controls {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 32px;
+  gap: 20px;
+  opacity: 0;
+  transition: opacity 0.12s 0.08s;
+}
+
+.dock.open .controls {
+  opacity: 1;
+}
+
+.btn {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  transition: color 0.15s;
+}
+
+.btn:hover {
+  color: var(--text);
+}
+
+.btn.active {
+  color: var(--text);
+}
+
+.sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.zoomBtn {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--muted);
+  line-height: 1;
+  padding: 2px 2px;
+  transition: color 0.15s;
+}
+
+.zoomBtn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.zoomBtn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.zoomLabel {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: center;
+}
