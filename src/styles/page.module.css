@@ -308,3 +308,64 @@ button.row:hover {
 .hidden {
   display: none;
 }
+
+/* Tabs */
+.tabBar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs {
+  display: flex;
+  gap: 28px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 0 10px;
+  margin-bottom: -1px;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 4px;
+}
+
+.tabActive {
+  color: var(--text);
+  border-bottom-color: var(--text);
+}
+
+.tabCount {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabBar .action {
+  padding-bottom: 10px;
+}
+
+/* Under tabs the list's own top rule would double the tab bar's. */
+.tabBar ~ [role="tabpanel"] .list,
+.tabBar ~ [role="tabpanel"] .empty {
+  border-top: none;
+}

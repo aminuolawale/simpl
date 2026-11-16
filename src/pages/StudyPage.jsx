@@ -6,6 +6,7 @@ import { currentUserId } from '../lib/resources'
 import { setSessionStudy } from '../lib/links'
 import { deleteStudy, deleteSession, deleteNote, plural } from '../lib/deletion'
 import { notePreview } from '../lib/notes'
+import { notifyDataChanged } from '../lib/events'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
 import ChooseModal from '../components/ChooseModal'
@@ -104,6 +105,7 @@ export default function StudyPage() {
         .update({ name: editing.name.trim(), corpus_id: editing.corpusId || null })
         .eq('id', studyId)
       if (error) throw error
+      notifyDataChanged()
     })
     setEditing(null)
   }

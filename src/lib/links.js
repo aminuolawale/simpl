@@ -5,6 +5,8 @@
 //   note → session      at most one note per session
 //   note → resource     optional reference
 
+import { notifyDataChanged } from './events'
+
 async function update(supabase, table, id, values) {
   const { error, count } = await supabase
     .from(table)
@@ -12,6 +14,7 @@ async function update(supabase, table, id, values) {
     .eq('id', id)
   if (error) throw error
   if (count === 0) throw new Error('Nothing was updated. It may have been deleted.')
+  notifyDataChanged()
 }
 
 export async function linkResource(supabase, corpusId, resourceId) {
@@ -19,6 +22,7 @@ export async function linkResource(supabase, corpusId, resourceId) {
     .from('corpus_resources')
     .upsert({ corpus_id: corpusId, resource_id: resourceId }, { ignoreDuplicates: true })
   if (error) throw error
+  notifyDataChanged()
 }
 
 export async function linkResources(supabase, corpusId, resourceIds) {
@@ -30,6 +34,7 @@ export async function linkResources(supabase, corpusId, resourceIds) {
       { ignoreDuplicates: true }
     )
   if (error) throw error
+  notifyDataChanged()
 }
 
 export async function unlinkResource(supabase, corpusId, resourceId) {
@@ -39,6 +44,7 @@ export async function unlinkResource(supabase, corpusId, resourceId) {
     .eq('corpus_id', corpusId)
     .eq('resource_id', resourceId)
   if (error) throw error
+  notifyDataChanged()
 }
 
 export const setStudyCorpus = (supabase, studyId, corpusId) =>

@@ -5,6 +5,7 @@ import { getSignedUrl } from '../lib/storage'
 import { attachNote, setNoteResource } from '../lib/links'
 import { deleteNote } from '../lib/deletion'
 import { noteTitle } from '../lib/notes'
+import { notifyDataChanged } from '../lib/events'
 import { usePdf } from '../context/PdfContext'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
@@ -68,6 +69,7 @@ export default function NotePage() {
     titleTimer.current = null
     const { error } = await supabase.from('notes').update({ title: value.trim() || null }).eq('id', noteId)
     if (error) setError(error.message)
+    else notifyDataChanged()
   }
 
   const onTitleChange = (value) => {

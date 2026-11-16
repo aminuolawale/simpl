@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { PdfProvider } from './context/PdfContext'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import AppShell from './components/AppShell'
 import HomePage from './pages/HomePage'
 import CorpusNewPage from './pages/CorpusNewPage'
 import CorpusPage from './pages/CorpusPage'
@@ -35,13 +36,16 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<CallbackPage />} />
-          <Route path="/" element={protect(<HomePage />)} />
-          <Route path="/corpus/new" element={protect(<CorpusNewPage />)} />
-          <Route path="/corpus/:id" element={protect(<CorpusPage />)} />
-          <Route path="/resource/:id" element={protect(<ResourcePage />)} />
-          <Route path="/study/new" element={protect(<StudyNewPage />)} />
-          <Route path="/study/:studyId" element={protect(<StudyPage />)} />
-          <Route path="/session/new" element={protect(<SessionNewPage />)} />
+          <Route element={protect(<AppShell />)}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/corpus/new" element={<CorpusNewPage />} />
+            <Route path="/corpus/:id" element={<CorpusPage />} />
+            <Route path="/resource/:id" element={<ResourcePage />} />
+            <Route path="/study/new" element={<StudyNewPage />} />
+            <Route path="/study/:studyId" element={<StudyPage />} />
+            <Route path="/session/new" element={<SessionNewPage />} />
+          </Route>
+          {/* Reader pages: full width, no side nav */}
           <Route path="/session/:sessionId" element={protect(<SessionPage />)} />
           <Route path="/note/:noteId" element={protect(<NotePage />)} />
           <Route path="/corpus/:id/study/:studyId" element={<LegacyStudyRedirect />} />

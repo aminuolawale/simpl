@@ -1,5 +1,6 @@
 import { uploadResource } from './storage'
 import { extractOutline } from './pdf'
+import { notifyDataChanged } from './events'
 
 // Uploads a PDF and creates a standalone resource row for it.
 export async function createResource(supabase, file) {
@@ -18,6 +19,7 @@ export async function createResource(supabase, file) {
     await supabase.storage.from('resources').remove([path])
     throw error
   }
+  notifyDataChanged()
   return data
 }
 

@@ -5,6 +5,8 @@
 //   session  → its note
 // Storage objects are not cascaded, so PDFs are removed explicitly.
 
+import { notifyDataChanged } from './events'
+
 const BUCKET = 'resources'
 
 async function deleteRow(supabase, table, column, value) {
@@ -14,6 +16,7 @@ async function deleteRow(supabase, table, column, value) {
     .eq(column, value)
   if (error) throw error
   if (count === 0) throw new Error('Nothing was deleted. It may already be gone.')
+  notifyDataChanged()
 }
 
 // Best effort: the row is already gone, so a leftover file must not block the UI.
