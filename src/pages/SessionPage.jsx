@@ -46,7 +46,7 @@ export default function SessionPage() {
 
       const resource = sessionData?.studies?.resources
       if (resource?.storage_path) {
-        loadPdfFromUrl(() => getSignedUrl(supabase, resource.storage_path), sessionData.start_page, resource.outline)
+        loadPdfFromUrl(() => getSignedUrl(supabase, resource.storage_path), sessionData.start_page, resource.outline, sessionData.studies.resource_id)
       }
     }
     init()

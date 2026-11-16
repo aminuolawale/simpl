@@ -103,3 +103,28 @@
   color: var(--muted);
   letter-spacing: 0.03em;
 }
+
+/* The PDF clip an equation came from, shown above the preview */
+.source {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.source img {
+  max-width: 100%;
+  max-height: 120px;
+  object-fit: contain;
+  mix-blend-mode: multiply; /* the clip's white page blends into the popup */
+}
+
+.source figcaption {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}

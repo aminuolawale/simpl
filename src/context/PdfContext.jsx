@@ -17,6 +17,8 @@ export function PdfProvider({ children }) {
   const [scale, setScale] = useState(1.2)
   const [fileName, setFileName] = useState('')
   const [initialPage, setInitialPage] = useState(1)
+  // Id of the resource the open document belongs to, when known.
+  const [docId, setDocId] = useState(null)
   // 'idle' | 'loading' | 'ready' | 'error'
   const [status, setStatus] = useState('idle')
 
@@ -28,8 +30,8 @@ export function PdfProvider({ children }) {
   // Load a document, replacing (and freeing) the previous one. `source` is
   // { data } or { url }; `url` may be an async function returning the URL, so
   // a failure to get a signed URL is reported (and retried) like any other.
-  const load = useCallback(async ({ source, startPage = 1, outline: knownOutline = null, name = '' }) => {
-    lastLoadRef.current = { source, startPage, outline: knownOutline, name }
+  const load = useCallback(async ({ source, startPage = 1, outline: knownOutline = null, name = '', id = null }) => {
+    lastLoadRef.current = { source, startPage, outline: knownOutline, name, id }
     const loadId = ++loadIdRef.current
     const isCurrent = () => loadId === loadIdRef.current
 
@@ -37,6 +39,7 @@ export function PdfProvider({ children }) {
     docRef.current = null
     setPdfDoc(null)
     setPageCount(0)
+    setDocId(null)
     setStatus('loading')
 
     let task
@@ -56,6 +59,7 @@ export function PdfProvider({ children }) {
       setCurrentPage(start)
       setInitialPage(start)
       setFileName(name)
+      setDocId(id)
       setStatus('ready')
     } catch (e) {
       task?.destroy()
@@ -72,9 +76,10 @@ export function PdfProvider({ children }) {
   )
 
   // `url` may be a string or an async function returning one (e.g. a signed URL).
+  // `id` is the resource's id, used to tie clips to their source.
   const loadPdfFromUrl = useCallback(
-    (url, startPage = 1, existingOutline = null) =>
-      load({ source: { url }, startPage, outline: existingOutline }).catch(() => {}),
+    (url, startPage = 1, existingOutline = null, id = null) =>
+      load({ source: { url }, startPage, outline: existingOutline, id }).catch(() => {}),
     [load]
   )
 
@@ -92,10 +97,10 @@ export function PdfProvider({ children }) {
   useEffect(() => () => docRef.current?.destroy(), [])
 
   const value = useMemo(() => ({
-    pdfDoc, outline, pageCount, setCurrentPage, status, retry,
+    pdfDoc, docId, outline, pageCount, setCurrentPage, status, retry,
     scale, zoomIn, zoomOut, loadPdf, loadPdfFromUrl, fileName, initialPage,
     goToPage, navigatorRef,
-  }), [pdfDoc, outline, pageCount, status, retry, scale, zoomIn, zoomOut,
+  }), [pdfDoc, docId, outline, pageCount, status, retry, scale, zoomIn, zoomOut,
     loadPdf, loadPdfFromUrl, fileName, initialPage, goToPage])
 
   return (

@@ -16,7 +16,9 @@ export function renderLatex(latex) {
 const WIDTH = 480
 const GAP = 6
 const MARGIN = 8
-export default function EquationPopup({ initial = '', rect, editing = false, onSubmit, onCancel }) {
+// `image` (a data URL) shows the PDF clip the equation came from, for comparison;
+// `uncertain` says the automatic transcription needs checking.
+export default function EquationPopup({ initial = '', rect, editing = false, image, uncertain = false, onSubmit, onCancel }) {
   const [latex, setLatex] = useState(initial)
   const inputRef = useRef(null)
   const rootRef = useRef(null)
@@ -27,7 +29,7 @@ export default function EquationPopup({ initial = '', rect, editing = false, onS
     const height = rootRef.current?.offsetHeight ?? 0
     const roomBelow = window.innerHeight - rect.bottom - GAP - MARGIN
     setAbove(height > roomBelow && rect.top - GAP - MARGIN > roomBelow)
-  }, [rect, preview])
+  }, [rect, preview, image])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -63,6 +65,14 @@ export default function EquationPopup({ initial = '', rect, editing = false, onS
       role="dialog"
       aria-label={editing ? 'Edit equation' : 'Insert equation'}
     >
+      {image && (
+        <figure className={styles.source}>
+          <img src={image} alt="Equation clipped from the PDF" />
+          <figcaption>
+            {uncertain ? 'From the PDF. This transcription may be wrong, so check it.' : 'From the PDF'}
+          </figcaption>
+        </figure>
+      )}
       <div className={styles.preview} aria-live="polite">
         {!preview ? (
           <span className={styles.previewEmpty}>Preview</span>

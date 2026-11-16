@@ -59,7 +59,7 @@ export default function NotePage() {
   const storagePath = note?.resources?.storage_path
   useEffect(() => {
     if (!storagePath) return
-    loadPdfFromUrl(() => getSignedUrl(supabase, storagePath), 1, note.resources.outline)
+    loadPdfFromUrl(() => getSignedUrl(supabase, storagePath), 1, note.resources.outline, note.resources.id)
   }, [storagePath])
 
   const saveTitle = async (value) => {

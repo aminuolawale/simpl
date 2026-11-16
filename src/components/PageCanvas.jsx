@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { usePdf } from '../context/PdfContext'
 import { createPdfViewer } from '../lib/pdfViewer'
+import PdfClipper from './PdfClipper'
 import styles from './PageCanvas.module.css'
 
 // The scrolling page view. React only renders the empty page boxes (once per
 // document); drawing, sizing, scrolling and jumps are handled by the viewer.
 export default function PageCanvas() {
-  const { pdfDoc, pageCount, scale, setCurrentPage, initialPage, status, retry, navigatorRef } = usePdf()
+  const { pdfDoc, docId, pageCount, scale, setCurrentPage, initialPage, status, retry, navigatorRef } = usePdf()
   const containerRef = useRef(null)
   const pagesRef = useRef([])
   const viewerRef = useRef(null)
@@ -65,6 +66,7 @@ export default function PageCanvas() {
   return (
     <div className={styles.container} ref={containerRef}>
       <div className={styles.pages}>{boxes}</div>
+      <PdfClipper containerRef={containerRef} pagesRef={pagesRef} pdfDoc={pdfDoc} docId={docId} />
     </div>
   )
 }

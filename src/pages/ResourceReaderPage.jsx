@@ -36,7 +36,7 @@ export default function ResourceReaderPage() {
       setResource(data)
       savedPage.current = data.last_page ?? 1
       setStarted(true)
-      loadPdfFromUrl(() => getSignedUrl(supabase, data.storage_path), savedPage.current, data.outline)
+      loadPdfFromUrl(() => getSignedUrl(supabase, data.storage_path), savedPage.current, data.outline, data.id)
     }
     init()
     return () => { cancelled = true }

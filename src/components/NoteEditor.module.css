@@ -156,3 +156,56 @@
 .editor :global(.suggestion) {
   color: var(--muted);
 }
+
+/* An equation clipped from the PDF, waiting to be converted */
+.editor :global(.pending-equation) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 2px 6px;
+  margin: 0 2px;
+  vertical-align: middle;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.editor :global(.pending-equation-image) {
+  max-height: 2.4em;
+  max-width: 220px;
+  object-fit: contain;
+  mix-blend-mode: multiply; /* white clip background blends into the chip */
+}
+
+.editor :global(.pending-equation[data-state="pending"] .pending-equation-status::after) {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border: 1.5px solid var(--muted);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: pending-spin 0.8s linear infinite;
+  vertical-align: -1px;
+}
+
+@keyframes pending-spin {
+  to { transform: rotate(360deg); }
+}
+
+.editor :global(.pending-equation-action) {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.editor :global(.ProseMirror-selectednode.pending-equation) {
+  border-color: var(--muted);
+}

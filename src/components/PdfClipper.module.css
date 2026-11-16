@@ -1,0 +1,49 @@
+.selection {
+  position: absolute;
+  z-index: 2; /* above the page canvas */
+  border: 1.5px solid #3b6fd8;
+  background: rgba(59, 111, 216, 0.08);
+  border-radius: 2px;
+  cursor: grab;
+}
+
+.selection:active {
+  cursor: grabbing;
+}
+
+.drawing {
+  cursor: crosshair;
+  border-style: dashed;
+}
+
+.actions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+  padding: 5px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  cursor: default;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.action {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
