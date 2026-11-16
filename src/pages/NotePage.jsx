@@ -16,6 +16,7 @@ import TocDrawer from '../components/TocDrawer'
 import PageCanvas from '../components/PageCanvas'
 import SessionDock from '../components/SessionDock'
 import NoteEditor from '../components/NoteEditor'
+import PaneDivider, { useNotePaneWidth } from '../components/PaneDivider'
 import reader from '../styles/reader.module.css'
 import styles from './NotePage.module.css'
 
@@ -28,6 +29,7 @@ export default function NotePage() {
   const navigate = useNavigate()
   const { loadPdfFromUrl } = usePdf()
   const [note, setNote] = useState(null)
+  const [noteWidth, setNoteWidth] = useNotePaneWidth()
   const [title, setTitle] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -162,7 +164,8 @@ export default function NotePage() {
             <div className={reader.pdfPane}>
               <PageCanvas />
             </div>
-            <div className={reader.notePane}>{editor}</div>
+            <PaneDivider width={noteWidth} onChange={setNoteWidth} />
+            <div className={reader.notePane} style={noteWidth ? { flex: '0 1 auto', width: noteWidth } : undefined}>{editor}</div>
           </div>
           <SessionDock drawerOpen={drawerOpen} onToggleDrawer={() => setDrawerOpen(o => !o)} />
         </>

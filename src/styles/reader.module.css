@@ -17,7 +17,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
+  min-width: 280px; /* PDF_MIN in PaneDivider.jsx */
 }
 
 .notePane {
@@ -25,7 +25,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-width: 300px;
+  min-width: 300px; /* NOTE_MIN in PaneDivider.jsx */
 }
 
 .complete {

@@ -10,6 +10,7 @@ import PageCanvas from '../components/PageCanvas'
 import SessionDock from '../components/SessionDock'
 import NoteEditor from '../components/NoteEditor'
 import ConfirmDelete from '../components/ConfirmDelete'
+import PaneDivider, { useNotePaneWidth } from '../components/PaneDivider'
 import styles from '../styles/reader.module.css'
 
 export default function SessionPage() {
@@ -22,6 +23,7 @@ export default function SessionPage() {
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [noteWidth, setNoteWidth] = useNotePaneWidth()
 
   const loadSession = async () => {
     const { data } = await supabase.from('reading_sessions')
@@ -92,7 +94,8 @@ export default function SessionPage() {
         <div className={styles.pdfPane}>
           <PageCanvas />
         </div>
-        <div className={styles.notePane}>
+        <PaneDivider width={noteWidth} onChange={setNoteWidth} />
+        <div className={styles.notePane} style={noteWidth ? { flex: '0 1 auto', width: noteWidth } : undefined}>
           <NoteEditor
             key={sessionId}
             noteId={note?.id ?? null}

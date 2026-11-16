@@ -1,0 +1,39 @@
+.divider {
+  position: relative;
+  flex: 0 0 1px;
+  background: var(--border);
+  cursor: col-resize;
+  outline: none;
+  touch-action: none;
+}
+
+/* A wider invisible grab area centred on the 1px line */
+.divider::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+  z-index: 2;
+}
+
+/* Visible handle on hover, focus and drag */
+.divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 -1px;
+  background: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.divider:hover::after,
+.divider:focus-visible::after,
+.dragging::after {
+  opacity: 0.5;
+}
+
+.shield {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  cursor: col-resize;
+}
