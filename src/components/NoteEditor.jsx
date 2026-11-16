@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { InlineMath } from '@tiptap/extension-mathematics'
+import TextAlign from '@tiptap/extension-text-align'
 import 'katex/dist/katex.min.css'
 import { AtMenu } from './editor/atMenu'
 import AtMenuList from './editor/AtMenuList'
@@ -14,7 +15,20 @@ import styles from './NoteEditor.module.css'
 
 const SAVE_DELAY = 1000
 
-// Toolbar buttons, in order. `null` draws a separator.
+// Alignment icons: four lines, shortened on the side away from the alignment.
+function AlignIcon({ align }) {
+  const x = (w) => (align === 'left' ? 0 : align === 'right' ? 14 - w : (14 - w) / 2)
+  return (
+    <svg width="14" height="11" viewBox="0 0 14 11" fill="none" aria-hidden="true">
+      {[14, 9, 14, 9].map((w, i) => (
+        <line key={i} x1={x(w)} x2={x(w) + w} y1={0.5 + i * 3.3} y2={0.5 + i * 3.3} stroke="currentColor" strokeWidth="1" />
+      ))}
+    </svg>
+  )
+}
+
+// Toolbar buttons, in order. `null` draws a separator. A tool is highlighted
+// when `active(editor)` is true, or else when `name`/`attrs` are active.
 const TOOLS = [
   { name: 'bold', label: <b>B</b>, title: 'Bold (⌘B)', run: c => c.toggleBold() },
   { name: 'italic', label: <em>I</em>, title: 'Italic (⌘I)', run: c => c.toggleItalic() },
@@ -26,6 +40,15 @@ const TOOLS = [
   null,
   { name: 'bulletList', label: '•', title: 'Bulleted list', run: c => c.toggleBulletList() },
   { name: 'orderedList', label: '1.', title: 'Numbered list', run: c => c.toggleOrderedList() },
+  null,
+  {
+    label: <AlignIcon align="left" />, title: 'Align left (⌘⇧L)',
+    // Left is the default, so it clears any alignment rather than storing one.
+    active: e => !e.isActive({ textAlign: 'center' }) && !e.isActive({ textAlign: 'right' }),
+    run: c => c.unsetTextAlign(),
+  },
+  { attrs: { textAlign: 'center' }, label: <AlignIcon align="center" />, title: 'Align center (⌘⇧E)', run: c => c.setTextAlign('center') },
+  { attrs: { textAlign: 'right' }, label: <AlignIcon align="right" />, title: 'Align right (⌘⇧R)', run: c => c.setTextAlign('right') },
 ]
 
 // Autosaving rich-text note. Saves by note id; if there is no note yet
@@ -79,6 +102,7 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right'] }),
       InlineMath.configure({
         katexOptions: { throwOnError: false },
         // Click an equation to edit it.
@@ -150,7 +174,8 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
   // Re-read which formats are active whenever the selection or content changes.
   const active = useEditorState({
     editor,
-    selector: ({ editor }) => TOOLS.map(t => !!t && !!editor?.isActive(t.name, t.attrs)),
+    selector: ({ editor }) => TOOLS.map(t => !!t && !!editor &&
+      (t.active ? t.active(editor) : t.name ? editor.isActive(t.name, t.attrs) : editor.isActive(t.attrs))),
   }) ?? []
 
   // Flush a pending save when leaving the page so the last edits aren't lost.
