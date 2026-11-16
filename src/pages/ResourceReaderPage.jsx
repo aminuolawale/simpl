@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getSignedUrl } from '../lib/storage'
-import { usePdf } from '../context/PdfContext'
+import { usePdf, useCurrentPage } from '../context/PdfContext'
 import AppBar from '../components/AppBar'
 import TocDrawer from '../components/TocDrawer'
 import PageCanvas from '../components/PageCanvas'
@@ -11,17 +11,21 @@ import styles from '../styles/reader.module.css'
 
 export default function ResourceReaderPage() {
   const { id } = useParams()
-  const { loadPdfFromUrl, currentPage, pageCount } = usePdf()
+  const { loadPdfFromUrl, pageCount, status } = usePdf()
+  const currentPage = useCurrentPage()
   const [resource, setResource] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [pdfReady, setPdfReady] = useState(false)
+  // True once this page has started loading its PDF; until then the context
+  // may still hold the previous document.
+  const [started, setStarted] = useState(false)
+  const pdfReady = started && status === 'ready'
   const [error, setError] = useState(null)
   const savedPage = useRef(null)
 
   useEffect(() => {
     let cancelled = false
     const init = async () => {
-      setPdfReady(false)
+      setStarted(false)
       setError(null)
       const { data, error } = await supabase.from('resources')
         .select('id, name, storage_path, outline, last_page')
@@ -30,15 +34,9 @@ export default function ResourceReaderPage() {
       if (cancelled) return
       if (error || !data) { setError('Could not find this PDF.'); return }
       setResource(data)
-      try {
-        const url = await getSignedUrl(supabase, data.storage_path)
-        if (cancelled) return
-        savedPage.current = data.last_page ?? 1
-        await loadPdfFromUrl(url, savedPage.current, data.outline)
-        if (!cancelled) setPdfReady(true)
-      } catch {
-        if (!cancelled) setError('Could not load this PDF.')
-      }
+      savedPage.current = data.last_page ?? 1
+      setStarted(true)
+      loadPdfFromUrl(() => getSignedUrl(supabase, data.storage_path), savedPage.current, data.outline)
     }
     init()
     return () => { cancelled = true }
@@ -76,7 +74,7 @@ export default function ResourceReaderPage() {
       <div className={styles.body}>
         {error ? (
           <p className={styles.message}>{error}</p>
-        ) : !pdfReady ? (
+        ) : !started ? (
           <p className={styles.message}>Loading…</p>
         ) : (
           <>

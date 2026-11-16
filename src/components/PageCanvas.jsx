@@ -1,163 +1,70 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { usePdf } from '../context/PdfContext'
+import { createPdfViewer } from '../lib/pdfViewer'
 import styles from './PageCanvas.module.css'
 
+// The scrolling page view. React only renders the empty page boxes (once per
+// document); drawing, sizing, scrolling and jumps are handled by the viewer.
 export default function PageCanvas() {
-  const { pdfDoc, pageCount, scale, currentPage, setCurrentPage, initialPage } = usePdf()
+  const { pdfDoc, pageCount, scale, setCurrentPage, initialPage, status, retry, navigatorRef } = usePdf()
   const containerRef = useRef(null)
-  const observerRef = useRef(null)
-  const renderingRef = useRef({})
-  const positionedDocRef = useRef(null)
-  const currentPageRef = useRef(currentPage)
-  currentPageRef.current = currentPage
+  const pagesRef = useRef([])
+  const viewerRef = useRef(null)
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
 
-  // Resize a page wrapper. If the page is entirely above the viewport, shift the
-  // scroll position by the height change so the page being read stays put.
-  const sizeWrapper = useCallback((wrapper, width, height) => {
-    const container = containerRef.current
-    const oldHeight = wrapper.offsetHeight
-    const above = container &&
-      wrapper.getBoundingClientRect().bottom <= container.getBoundingClientRect().top
-    wrapper.style.width = `${width}px`
-    wrapper.style.height = `${height}px`
-    if (above) container.scrollTop += wrapper.offsetHeight - oldHeight
-  }, [])
-
-  const renderPage = useCallback(async (pageNum) => {
-    if (!pdfDoc || renderingRef.current[pageNum]) return
-    renderingRef.current[pageNum] = true
-
-    const canvas = document.getElementById(`pdf-canvas-${pageNum}`)
-    if (!canvas) { renderingRef.current[pageNum] = false; return }
-
-    try {
-      const page = await pdfDoc.getPage(pageNum)
-      const viewport = page.getViewport({ scale })
-      const ctx = canvas.getContext('2d')
-
-      const dpr = window.devicePixelRatio || 1
-      canvas.width = viewport.width * dpr
-      canvas.height = viewport.height * dpr
-      canvas.style.width = `${viewport.width}px`
-      canvas.style.height = `${viewport.height}px`
-
-      const wrapper = canvas.parentElement
-      if (wrapper) sizeWrapper(wrapper, viewport.width, viewport.height)
-
-      ctx.scale(dpr, dpr)
-      await page.render({ canvasContext: ctx, viewport }).promise
-    } catch {}
-
-    renderingRef.current[pageNum] = false
-  }, [pdfDoc, scale, sizeWrapper])
-
-  // Pre-size all page wrappers so scrollIntoView lands accurately before pages render
   useEffect(() => {
-    if (!pdfDoc) return
-    let cancelled = false
-
-    const presizeAll = async () => {
-      // One getPage call — apply its dimensions to every wrapper immediately
-      const firstPage = await pdfDoc.getPage(1)
-      if (cancelled) return
-      const { width, height } = firstPage.getViewport({ scale })
-      for (let i = 1; i <= pageCount; i++) {
-        const wrapper = document.getElementById(`pdf-page-${i}`)
-        if (wrapper) {
-          wrapper.style.width = `${width}px`
-          wrapper.style.height = `${height}px`
-        }
-      }
-
-      // Position the reader: a newly loaded document opens at its initial page;
-      // after a zoom, stay on the page being read. Always scroll (even to page 1)
-      // so no scroll position carries over from a previously shown document.
-      const isNewDoc = positionedDocRef.current !== pdfDoc
-      positionedDocRef.current = pdfDoc
-      const target = Math.min(Math.max(1, isNewDoc ? initialPage : currentPageRef.current), pageCount)
-      const container = containerRef.current
-      const el = document.getElementById(`pdf-page-${target}`)
-      if (container) {
-        if (target <= 1 || !el) container.scrollTop = 0
-        else el.scrollIntoView({ block: 'start' })
-      }
-
-      // Background pass: correct pages whose dimensions differ from page 1
-      for (let i = 2; i <= pageCount; i++) {
-        if (cancelled) return
-        const page = await pdfDoc.getPage(i)
-        const vp = page.getViewport({ scale })
-        if (vp.width === width && vp.height === height) continue
-        const wrapper = document.getElementById(`pdf-page-${i}`)
-        if (wrapper) sizeWrapper(wrapper, vp.width, vp.height)
-      }
-    }
-
-    presizeAll()
-    return () => { cancelled = true }
-  }, [pdfDoc, scale, pageCount, initialPage, sizeWrapper])
-
-  // Clear canvases and reset render flags when scale changes
-  useEffect(() => {
-    renderingRef.current = {}
-    if (!pdfDoc) return
-    for (let i = 1; i <= pageCount; i++) {
-      const canvas = document.getElementById(`pdf-canvas-${i}`)
-      if (canvas) {
-        const ctx = canvas.getContext('2d')
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-      }
-    }
-  }, [scale, pdfDoc, pageCount])
-
-  // Intersection observer: render pages on enter, track current page
-  useEffect(() => {
-    if (!pdfDoc) return
-
-    const ratioMap = {}
-
-    observerRef.current?.disconnect()
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const pageNum = parseInt(entry.target.dataset.page, 10)
-          ratioMap[pageNum] = entry.intersectionRatio
-          if (entry.isIntersecting) renderPage(pageNum)
-        })
-
-        let best = null
-        let bestRatio = 0
-        Object.entries(ratioMap).forEach(([num, ratio]) => {
-          if (ratio > bestRatio) { bestRatio = ratio; best = parseInt(num, 10) }
-        })
-        if (best) setCurrentPage(best)
-      },
-      { root: containerRef.current, threshold: Array.from({ length: 11 }, (_, i) => i / 10) }
-    )
-
-    document.querySelectorAll('[data-page]').forEach((el) => {
-      observerRef.current.observe(el)
+    if (!pdfDoc || !containerRef.current) return
+    const viewer = createPdfViewer({
+      pdfDoc,
+      container: containerRef.current,
+      pages: pagesRef.current,
+      initialPage,
+      scale: scaleRef.current,
+      onPageChange: setCurrentPage,
     })
+    viewerRef.current = viewer
+    navigatorRef.current = viewer.goTo
+    return () => {
+      viewer.destroy()
+      if (navigatorRef.current === viewer.goTo) navigatorRef.current = null
+      viewerRef.current = null
+    }
+    // initialPage is set together with pdfDoc, so it's read once per document.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfDoc])
 
-    return () => observerRef.current?.disconnect()
-  }, [pdfDoc, pageCount, renderPage, setCurrentPage])
+  useEffect(() => { viewerRef.current?.setScale(scale) }, [scale])
 
-  if (!pdfDoc) return null
+  const boxes = useMemo(() => {
+    pagesRef.current = []
+    return Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
+      <div
+        key={n}
+        ref={el => { if (el) pagesRef.current[n] = el }}
+        className={styles.pageWrapper}
+        data-page={n}
+        aria-label={`Page ${n}`}
+      />
+    ))
+  }, [pdfDoc, pageCount])
+
+  if (!pdfDoc) {
+    if (status === 'error') {
+      return (
+        <div className={styles.message}>
+          <p>The PDF couldn’t be loaded.</p>
+          <button className={styles.retry} onClick={retry}>Try again</button>
+        </div>
+      )
+    }
+    if (status === 'loading') return <div className={styles.message}><p>Loading PDF…</p></div>
+    return null
+  }
 
   return (
     <div className={styles.container} ref={containerRef}>
-      <div className={styles.pages}>
-        {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNum) => (
-          <div
-            key={pageNum}
-            id={`pdf-page-${pageNum}`}
-            className={styles.pageWrapper}
-            data-page={pageNum}
-          >
-            <canvas id={`pdf-canvas-${pageNum}`} className={styles.canvas} />
-          </div>
-        ))}
-      </div>
+      <div className={styles.pages}>{boxes}</div>
     </div>
   )
 }

@@ -1,9 +1,10 @@
-import { usePdf } from '../context/PdfContext'
+import { usePdf, useCurrentPage } from '../context/PdfContext'
 import { supabase } from '../lib/supabase'
 import styles from './TopBar.module.css'
 
 export default function TopBar({ drawerOpen, onToggleDrawer, onClose }) {
-  const { currentPage, pageCount, fileName } = usePdf()
+  const { pageCount, fileName } = usePdf()
+  const currentPage = useCurrentPage()
 
   const signOut = () => supabase.auth.signOut()
 

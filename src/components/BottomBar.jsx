@@ -1,13 +1,9 @@
-import { usePdf } from '../context/PdfContext'
+import { usePdf, useCurrentPage } from '../context/PdfContext'
 import styles from './BottomBar.module.css'
 
 export default function BottomBar({ onToggleDrawer, drawerOpen }) {
-  const { currentPage, pageCount, scale, zoomIn, zoomOut } = usePdf()
-
-  const goTo = (pageNum) => {
-    const el = document.getElementById(`pdf-page-${pageNum}`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const { pageCount, scale, zoomIn, zoomOut, goToPage: goTo } = usePdf()
+  const currentPage = useCurrentPage()
 
   const prev = () => goTo(Math.max(1, currentPage - 1))
   const next = () => goTo(Math.min(pageCount, currentPage + 1))

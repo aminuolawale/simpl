@@ -1,13 +1,12 @@
-import { usePdf } from '../context/PdfContext'
+import { usePdf, useCurrentPage } from '../context/PdfContext'
 import styles from './TocDrawer.module.css'
 
 export default function TocDrawer({ open }) {
-  const { outline, currentPage } = usePdf()
+  const { outline, goToPage } = usePdf()
+  const currentPage = useCurrentPage()
 
   const scrollToPage = (pageNumber) => {
-    if (!pageNumber) return
-    const el = document.getElementById(`pdf-page-${pageNumber}`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (pageNumber) goToPage(pageNumber)
   }
 
   return (

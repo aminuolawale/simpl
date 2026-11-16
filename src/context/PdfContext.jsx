@@ -1,32 +1,13 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
-import * as pdfjsLib from 'pdfjs-dist'
+import { createContext, useContext, useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import pdfjsLib from '../lib/pdfjs'
+import { readOutline } from '../lib/pdf'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
-
-async function resolveOutline(pdf, outline) {
-  if (!outline || outline.length === 0) return []
-  return Promise.all(
-    outline.map(async (item) => {
-      let pageNumber = null
-      try {
-        if (item.dest) {
-          let dest = item.dest
-          if (typeof dest === 'string') dest = await pdf.getDestination(dest)
-          if (Array.isArray(dest) && dest[0]) {
-            pageNumber = (await pdf.getPageIndex(dest[0])) + 1
-          }
-        }
-      } catch {}
-      return {
-        title: item.title,
-        pageNumber,
-        items: await resolveOutline(pdf, item.items || []),
-      }
-    })
-  )
-}
-
+// Two contexts: PdfContext holds things that change rarely (the document,
+// zoom, loading state, actions); PdfPageContext holds the current page, which
+// changes constantly while scrolling. Keeping them apart means pages that only
+// load a PDF (and their note editors) don't re-render on every scroll.
 const PdfContext = createContext(null)
+const PdfPageContext = createContext(1)
 
 export function PdfProvider({ children }) {
   const [pdfDoc, setPdfDoc] = useState(null)
@@ -36,57 +17,101 @@ export function PdfProvider({ children }) {
   const [scale, setScale] = useState(1.2)
   const [fileName, setFileName] = useState('')
   const [initialPage, setInitialPage] = useState(1)
+  // 'idle' | 'loading' | 'ready' | 'error'
+  const [status, setStatus] = useState('idle')
+
   const loadIdRef = useRef(0)
+  const docRef = useRef(null)
+  const lastLoadRef = useRef(null)
+  const navigatorRef = useRef(null) // set by PageCanvas
 
-  const loadPdf = useCallback(async (file) => {
+  // Load a document, replacing (and freeing) the previous one. `source` is
+  // { data } or { url }; `url` may be an async function returning the URL, so
+  // a failure to get a signed URL is reported (and retried) like any other.
+  const load = useCallback(async ({ source, startPage = 1, outline: knownOutline = null, name = '' }) => {
+    lastLoadRef.current = { source, startPage, outline: knownOutline, name }
     const loadId = ++loadIdRef.current
-    const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-    const rawOutline = await pdf.getOutline()
-    const resolved = await resolveOutline(pdf, rawOutline)
-    if (loadId !== loadIdRef.current) return
-    setPdfDoc(pdf)
-    setOutline(resolved)
-    setPageCount(pdf.numPages)
-    setCurrentPage(1)
-    setInitialPage(1)
-    setFileName(file.name)
-  }, [])
+    const isCurrent = () => loadId === loadIdRef.current
 
-  const loadPdfFromUrl = useCallback(async (url, startPage = 1, existingOutline = null) => {
-    // Hide whatever was open before so it isn't shown (at its old position)
-    // while the new document loads, and ignore loads overtaken by a newer one.
-    const loadId = ++loadIdRef.current
+    docRef.current?.destroy()
+    docRef.current = null
     setPdfDoc(null)
     setPageCount(0)
-    const pdf = await pdfjsLib.getDocument({ url }).promise
-    let resolved = existingOutline
-    if (!resolved) {
-      const rawOutline = await pdf.getOutline()
-      resolved = await resolveOutline(pdf, rawOutline)
+    setStatus('loading')
+
+    let task
+    try {
+      let params = source
+      if (typeof source.url === 'function') params = { url: await source.url() }
+      if (!isCurrent()) return
+      task = pdfjsLib.getDocument(params)
+      const pdf = await task.promise
+      const resolved = knownOutline ?? await readOutline(pdf)
+      if (!isCurrent()) { pdf.destroy(); return }
+      docRef.current = pdf
+      setPdfDoc(pdf)
+      setOutline(resolved ?? [])
+      setPageCount(pdf.numPages)
+      const start = Math.min(Math.max(1, startPage || 1), pdf.numPages)
+      setCurrentPage(start)
+      setInitialPage(start)
+      setFileName(name)
+      setStatus('ready')
+    } catch (e) {
+      task?.destroy()
+      if (!isCurrent()) return
+      console.error('Could not load PDF', e)
+      setStatus('error')
+      throw e
     }
-    if (loadId !== loadIdRef.current) return
-    setPdfDoc(pdf)
-    setOutline(resolved ?? [])
-    setPageCount(pdf.numPages)
-    setCurrentPage(startPage)
-    setInitialPage(startPage)
-    setFileName('')
   }, [])
 
-  const zoomIn  = useCallback(() => setScale(s => Math.min(s + 0.2, 3)), [])
-  const zoomOut = useCallback(() => setScale(s => Math.max(s - 0.2, 0.4)), [])
+  const loadPdf = useCallback(
+    async (file) => load({ source: { data: await file.arrayBuffer() }, name: file.name }),
+    [load]
+  )
+
+  // `url` may be a string or an async function returning one (e.g. a signed URL).
+  const loadPdfFromUrl = useCallback(
+    (url, startPage = 1, existingOutline = null) =>
+      load({ source: { url }, startPage, outline: existingOutline }).catch(() => {}),
+    [load]
+  )
+
+  const retry = useCallback(() => {
+    if (lastLoadRef.current) load(lastLoadRef.current).catch(() => {})
+  }, [load])
+
+  // Jump straight to a page (no scroll animation).
+  const goToPage = useCallback((page) => navigatorRef.current?.(page), [])
+
+  const zoomIn  = useCallback(() => setScale(s => Math.min(+(s + 0.2).toFixed(2), 3)), [])
+  const zoomOut = useCallback(() => setScale(s => Math.max(+(s - 0.2).toFixed(2), 0.4)), [])
+
+  // Free the document when the app unmounts.
+  useEffect(() => () => docRef.current?.destroy(), [])
+
+  const value = useMemo(() => ({
+    pdfDoc, outline, pageCount, setCurrentPage, status, retry,
+    scale, zoomIn, zoomOut, loadPdf, loadPdfFromUrl, fileName, initialPage,
+    goToPage, navigatorRef,
+  }), [pdfDoc, outline, pageCount, status, retry, scale, zoomIn, zoomOut,
+    loadPdf, loadPdfFromUrl, fileName, initialPage, goToPage])
 
   return (
-    <PdfContext.Provider value={{
-      pdfDoc, outline, pageCount, currentPage, setCurrentPage,
-      scale, zoomIn, zoomOut, loadPdf, loadPdfFromUrl, fileName, initialPage,
-    }}>
-      {children}
+    <PdfContext.Provider value={value}>
+      <PdfPageContext.Provider value={currentPage}>
+        {children}
+      </PdfPageContext.Provider>
     </PdfContext.Provider>
   )
 }
 
 export function usePdf() {
   return useContext(PdfContext)
+}
+
+// The page currently in view. Only components that display it should use this.
+export function useCurrentPage() {
+  return useContext(PdfPageContext)
 }

@@ -4,12 +4,7 @@ import styles from './SessionDock.module.css'
 
 export default function SessionDock({ drawerOpen, onToggleDrawer, startPage, endPage }) {
   const [open, setOpen] = useState(false)
-  const { scale, zoomIn, zoomOut } = usePdf()
-
-  const goTo = (page) => {
-    const el = document.getElementById(`pdf-page-${page}`)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  const { scale, zoomIn, zoomOut, goToPage: goTo } = usePdf()
 
   const zoomPercent = Math.round(scale * 100)
 
