@@ -1,6 +1,8 @@
 .container {
   flex: 1;
   overflow-y: auto;
+  /* PageCanvas keeps the reading position itself when pages above are resized */
+  overflow-anchor: none;
   background: var(--bg);
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;

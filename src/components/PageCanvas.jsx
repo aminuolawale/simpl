@@ -3,10 +3,25 @@ import { usePdf } from '../context/PdfContext'
 import styles from './PageCanvas.module.css'
 
 export default function PageCanvas() {
-  const { pdfDoc, pageCount, scale, setCurrentPage, initialPage } = usePdf()
+  const { pdfDoc, pageCount, scale, currentPage, setCurrentPage, initialPage } = usePdf()
   const containerRef = useRef(null)
   const observerRef = useRef(null)
   const renderingRef = useRef({})
+  const positionedDocRef = useRef(null)
+  const currentPageRef = useRef(currentPage)
+  currentPageRef.current = currentPage
+
+  // Resize a page wrapper. If the page is entirely above the viewport, shift the
+  // scroll position by the height change so the page being read stays put.
+  const sizeWrapper = useCallback((wrapper, width, height) => {
+    const container = containerRef.current
+    const oldHeight = wrapper.offsetHeight
+    const above = container &&
+      wrapper.getBoundingClientRect().bottom <= container.getBoundingClientRect().top
+    wrapper.style.width = `${width}px`
+    wrapper.style.height = `${height}px`
+    if (above) container.scrollTop += wrapper.offsetHeight - oldHeight
+  }, [])
 
   const renderPage = useCallback(async (pageNum) => {
     if (!pdfDoc || renderingRef.current[pageNum]) return
@@ -27,17 +42,14 @@ export default function PageCanvas() {
       canvas.style.height = `${viewport.height}px`
 
       const wrapper = canvas.parentElement
-      if (wrapper) {
-        wrapper.style.width = `${viewport.width}px`
-        wrapper.style.height = `${viewport.height}px`
-      }
+      if (wrapper) sizeWrapper(wrapper, viewport.width, viewport.height)
 
       ctx.scale(dpr, dpr)
       await page.render({ canvasContext: ctx, viewport }).promise
     } catch {}
 
     renderingRef.current[pageNum] = false
-  }, [pdfDoc, scale])
+  }, [pdfDoc, scale, sizeWrapper])
 
   // Pre-size all page wrappers so scrollIntoView lands accurately before pages render
   useEffect(() => {
@@ -57,10 +69,17 @@ export default function PageCanvas() {
         }
       }
 
-      // Scroll now — layout is accurate enough for uniform PDFs
-      if (!cancelled && initialPage > 1) {
-        const el = document.getElementById(`pdf-page-${initialPage}`)
-        if (el) el.scrollIntoView({ block: 'start' })
+      // Position the reader: a newly loaded document opens at its initial page;
+      // after a zoom, stay on the page being read. Always scroll (even to page 1)
+      // so no scroll position carries over from a previously shown document.
+      const isNewDoc = positionedDocRef.current !== pdfDoc
+      positionedDocRef.current = pdfDoc
+      const target = Math.min(Math.max(1, isNewDoc ? initialPage : currentPageRef.current), pageCount)
+      const container = containerRef.current
+      const el = document.getElementById(`pdf-page-${target}`)
+      if (container) {
+        if (target <= 1 || !el) container.scrollTop = 0
+        else el.scrollIntoView({ block: 'start' })
       }
 
       // Background pass: correct pages whose dimensions differ from page 1
@@ -70,16 +89,13 @@ export default function PageCanvas() {
         const vp = page.getViewport({ scale })
         if (vp.width === width && vp.height === height) continue
         const wrapper = document.getElementById(`pdf-page-${i}`)
-        if (wrapper) {
-          wrapper.style.width = `${vp.width}px`
-          wrapper.style.height = `${vp.height}px`
-        }
+        if (wrapper) sizeWrapper(wrapper, vp.width, vp.height)
       }
     }
 
     presizeAll()
     return () => { cancelled = true }
-  }, [pdfDoc, scale, pageCount, initialPage])
+  }, [pdfDoc, scale, pageCount, initialPage, sizeWrapper])
 
   // Clear canvases and reset render flags when scale changes
   useEffect(() => {

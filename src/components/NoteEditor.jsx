@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { supabase } from '../lib/supabase'
 import { deleteNote } from '../lib/deletion'
@@ -8,6 +8,20 @@ import ConfirmDelete from './ConfirmDelete'
 import styles from './NoteEditor.module.css'
 
 const SAVE_DELAY = 1000
+
+// Toolbar buttons, in order. `null` draws a separator.
+const TOOLS = [
+  { name: 'bold', label: <b>B</b>, title: 'Bold (⌘B)', run: c => c.toggleBold() },
+  { name: 'italic', label: <em>I</em>, title: 'Italic (⌘I)', run: c => c.toggleItalic() },
+  null,
+  ...[1, 2, 3].map(level => ({
+    name: 'heading', attrs: { level }, label: `H${level}`, title: `Heading ${level}`,
+    run: c => c.toggleHeading({ level }),
+  })),
+  null,
+  { name: 'bulletList', label: '•', title: 'Bulleted list', run: c => c.toggleBulletList() },
+  { name: 'orderedList', label: '1.', title: 'Numbered list', run: c => c.toggleOrderedList() },
+]
 
 // Autosaving rich-text note. Saves by note id; if there is no note yet
 // (`noteId` null), the first edit inserts one using the `newNote` columns,
@@ -49,7 +63,7 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
   }
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } })],
     content: initialContent ?? '',
     onUpdate: ({ editor }) => {
       clearTimeout(saveTimer.current)
@@ -60,6 +74,12 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
       }, SAVE_DELAY)
     },
   })
+
+  // Re-read which formats are active whenever the selection or content changes.
+  const active = useEditorState({
+    editor,
+    selector: ({ editor }) => TOOLS.map(t => !!t && !!editor?.isActive(t.name, t.attrs)),
+  }) ?? []
 
   // Flush a pending save when leaving the page so the last edits aren't lost.
   useEffect(() => () => {
@@ -85,21 +105,16 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
   return (
     <div className={styles.wrap}>
       <div className={styles.toolbar}>
-        <button
-          className={`${styles.btn} ${editor?.isActive('bold') ? styles.active : ''}`}
-          onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleBold().run() }}
-          title="Bold"
-        >B</button>
-        <button
-          className={`${styles.btn} ${editor?.isActive('italic') ? styles.active : ''}`}
-          onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleItalic().run() }}
-          title="Italic"
-        ><em>I</em></button>
-        <button
-          className={`${styles.btn} ${editor?.isActive('bulletList') ? styles.active : ''}`}
-          onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run() }}
-          title="Bullet list"
-        >—</button>
+        {TOOLS.map((t, i) => t ? (
+          <button
+            key={i}
+            className={`${styles.btn} ${active[i] ? styles.active : ''}`}
+            onMouseDown={e => { e.preventDefault(); editor && t.run(editor.chain().focus()).run() }}
+            title={t.title}
+            aria-label={t.title}
+            aria-pressed={!!active[i]}
+          >{t.label}</button>
+        ) : <span key={i} className={styles.toolSep} />)}
         <span ref={statusRef} className={styles.status} />
         {deletable && (
           <button

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`
@@ -36,12 +36,15 @@ export function PdfProvider({ children }) {
   const [scale, setScale] = useState(1.2)
   const [fileName, setFileName] = useState('')
   const [initialPage, setInitialPage] = useState(1)
+  const loadIdRef = useRef(0)
 
   const loadPdf = useCallback(async (file) => {
+    const loadId = ++loadIdRef.current
     const arrayBuffer = await file.arrayBuffer()
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
     const rawOutline = await pdf.getOutline()
     const resolved = await resolveOutline(pdf, rawOutline)
+    if (loadId !== loadIdRef.current) return
     setPdfDoc(pdf)
     setOutline(resolved)
     setPageCount(pdf.numPages)
@@ -51,12 +54,18 @@ export function PdfProvider({ children }) {
   }, [])
 
   const loadPdfFromUrl = useCallback(async (url, startPage = 1, existingOutline = null) => {
+    // Hide whatever was open before so it isn't shown (at its old position)
+    // while the new document loads, and ignore loads overtaken by a newer one.
+    const loadId = ++loadIdRef.current
+    setPdfDoc(null)
+    setPageCount(0)
     const pdf = await pdfjsLib.getDocument({ url }).promise
     let resolved = existingOutline
     if (!resolved) {
       const rawOutline = await pdf.getOutline()
       resolved = await resolveOutline(pdf, rawOutline)
     }
+    if (loadId !== loadIdRef.current) return
     setPdfDoc(pdf)
     setOutline(resolved ?? [])
     setPageCount(pdf.numPages)
