@@ -106,10 +106,7 @@ export default function ResourcePage() {
           )}
         </Section>
 
-        <Section
-          title="Studies"
-          action={<Link to={`/study/new?resource=${id}`} className={styles.action}>+ New study</Link>}
-        >
+        <Section title="Studies">
           {studies.length === 0 ? <Empty>No studies read this PDF.</Empty> : (
             <ul className={styles.list}>
               {studies.map(s => (
