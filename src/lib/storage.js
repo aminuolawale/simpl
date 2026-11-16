@@ -1,9 +1,12 @@
-export function resourcePath(userId, corpusId, filename) {
-  return `${userId}/${corpusId}/${filename}`
+// Storage paths are `userId/folderId/filename`. The first segment must be the
+// user's id (storage RLS checks it). New uploads use a random folder id so a
+// file isn't tied to any corpus and same-named files never collide.
+export function resourcePath(userId, folderId, filename) {
+  return `${userId}/${folderId}/${filename}`
 }
 
-export async function uploadResource(supabase, userId, corpusId, file) {
-  const path = resourcePath(userId, corpusId, file.name)
+export async function uploadResource(supabase, userId, file) {
+  const path = resourcePath(userId, crypto.randomUUID(), file.name)
   const { error } = await supabase.storage.from('resources').upload(path, file, { upsert: false })
   if (error) throw error
   return path

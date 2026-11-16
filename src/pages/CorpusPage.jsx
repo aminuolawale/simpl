@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { uploadResource } from '../lib/storage'
-import { extractOutline } from '../lib/pdf'
+import { linkResources, unlinkResource, setStudyCorpus } from '../lib/links'
+import { deleteCorpus, deleteResource, deleteStudy, resourceDeleteMessage, plural } from '../lib/deletion'
+import { fmtSize } from '../lib/format'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
+import ChooseModal from '../components/ChooseModal'
 import ProgressBar from '../components/ProgressBar'
-import ConfirmDelete, { RowDeleteButton } from '../components/ConfirmDelete'
-import { deleteCorpus, deleteResource, deleteStudy, plural } from '../lib/deletion'
-import styles from './CorpusPage.module.css'
+import ResourcePicker from '../components/ResourcePicker'
+import Section, { Empty } from '../components/Section'
+import ConfirmDelete, { RowAction, RowDeleteButton } from '../components/ConfirmDelete'
+import styles from '../styles/page.module.css'
 
 export default function CorpusPage() {
   const { id } = useParams()
@@ -17,130 +20,71 @@ export default function CorpusPage() {
   const [resources, setResources] = useState([])
   const [studies, setStudies] = useState([])
   const [loading, setLoading] = useState(true)
-  const [uploadingPdf, setUploadingPdf] = useState(false)
-  const [creatingStudy, setCreatingStudy] = useState(false)
-  const [studyName, setStudyName] = useState('')
-  const [studyResourceId, setStudyResourceId] = useState('')
   const [error, setError] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [toAdd, setToAdd] = useState([])
+  const [linkCandidates, setLinkCandidates] = useState(null) // studies offered for linking
   const [pendingDelete, setPendingDelete] = useState(null) // { title, message, run }
-  const fileRef = useRef(null)
 
   const load = async () => {
     const [
       { data: corpusData },
-      { data: resourceData },
+      { data: linkData },
       { data: studyData },
     ] = await Promise.all([
       supabase.from('corpora').select('id, name').eq('id', id).single(),
-      supabase.from('resources').select('id, name, size_bytes, created_at').eq('corpus_id', id).order('created_at'),
+      supabase.from('corpus_resources')
+        .select('added_at, resources(id, name, size_bytes)')
+        .eq('corpus_id', id)
+        .order('added_at'),
       supabase.from('studies')
-        .select('id, name, resource_id, resources(name), reading_sessions(id, completed)')
+        .select('id, name, resources(name), reading_sessions(id, completed)')
         .eq('corpus_id', id)
         .order('created_at'),
     ])
     setCorpus(corpusData)
-    setResources(resourceData ?? [])
+    setResources((linkData ?? []).map(l => l.resources).filter(Boolean))
     setStudies(studyData ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [id])
 
-  const handlePdfUpload = async (file) => {
-    if (!file || file.type !== 'application/pdf') return
-    setUploadingPdf(true)
+  const run = async (action) => {
     setError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const [path, outline] = await Promise.all([
-        uploadResource(supabase, user.id, id, file),
-        extractOutline(file),
-      ])
-      await supabase.from('resources').insert({
-        corpus_id: id,
-        name: file.name,
-        storage_path: path,
-        size_bytes: file.size,
-        outline,
-      })
-      load()
+      await action()
+      await load()
     } catch (e) {
       setError(e.message)
     }
-    setUploadingPdf(false)
   }
 
-  const createStudy = async (e) => {
-    e.preventDefault()
-    if (!studyName.trim() || !studyResourceId) return
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('studies').insert({
-      corpus_id: id,
-      resource_id: studyResourceId,
-      user_id: user.id,
-      name: studyName.trim(),
+  const confirm = (title, message, action) =>
+    setPendingDelete({
+      title,
+      message,
+      run: async () => {
+        await action()
+        setPendingDelete(null)
+        load()
+      },
     })
+
+  const addResources = async () => {
+    await run(() => linkResources(supabase, id, toAdd))
+    setAdding(false)
+    setToAdd([])
+  }
+
+  const openLinkStudy = async () => {
+    const { data, error } = await supabase
+      .from('studies')
+      .select('id, name, corpus_id, corpora(name), resources(name)')
+      .order('created_at', { ascending: false })
     if (error) { setError(error.message); return }
-    setStudyName('')
-    setStudyResourceId('')
-    setCreatingStudy(false)
-    load()
+    setLinkCandidates((data ?? []).filter(s => s.corpus_id !== id))
   }
-
-  const confirmDeleteCorpus = () => {
-    const parts = []
-    if (resources.length) parts.push(plural(resources.length, 'PDF'))
-    if (studies.length) parts.push(`${plural(studies.length, 'study', 'studies')} with their sessions and notes`)
-    setPendingDelete({
-      title: 'Delete corpus',
-      message: parts.length
-        ? `“${corpus?.name}” and everything in it will be deleted: ${parts.join(' and ')}.`
-        : `“${corpus?.name}” will be deleted.`,
-      run: async () => {
-        await deleteCorpus(supabase, id)
-        navigate('/')
-      },
-    })
-  }
-
-  const confirmDeleteResource = (r) => {
-    const dependent = studies.filter(s => s.resource_id === r.id).length
-    setPendingDelete({
-      title: 'Delete PDF',
-      message: dependent
-        ? `“${r.name}” will be deleted, along with ${plural(dependent, 'study', 'studies')} that use it and their sessions and notes.`
-        : `“${r.name}” will be deleted.`,
-      run: async () => {
-        await deleteResource(supabase, r.id)
-        setPendingDelete(null)
-        load()
-      },
-    })
-  }
-
-  const confirmDeleteStudy = (s) => {
-    const sessions = s.reading_sessions?.length ?? 0
-    setPendingDelete({
-      title: 'Delete study',
-      message: sessions
-        ? `“${s.name}” will be deleted, along with ${plural(sessions, 'reading session')} and their notes. The PDF is kept.`
-        : `“${s.name}” will be deleted. The PDF is kept.`,
-      run: async () => {
-        await deleteStudy(supabase, s.id)
-        setPendingDelete(null)
-        load()
-      },
-    })
-  }
-
-  const fmtSize = (bytes) => {
-    if (!bytes) return ''
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-
-  const fmtDate = (iso) =>
-    new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
   if (loading) return <div className={styles.root}><AppBar /></div>
 
@@ -149,84 +93,138 @@ export default function CorpusPage() {
       <AppBar
         crumbs={[{ label: corpus?.name }]}
         actions={
-          <button className={styles.action} onClick={confirmDeleteCorpus}>
+          <button
+            className={styles.action}
+            onClick={() => confirm(
+              'Delete corpus',
+              `“${corpus?.name}” will be deleted. Its ${plural(resources.length, 'PDF')} and ${plural(studies.length, 'study', 'studies')} are kept and stay available on their own.`,
+              async () => { await deleteCorpus(supabase, id); navigate('/') },
+            )}
+          >
             Delete corpus
           </button>
         }
       />
       <main className={styles.main}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>{corpus?.name}</h1>
+        </div>
         {error && <p className={styles.error}>{error}</p>}
 
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Resources</h2>
-            <button
-              className={styles.action}
-              onClick={() => fileRef.current.click()}
-              disabled={uploadingPdf}
-            >
-              {uploadingPdf ? 'Uploading…' : '+ Add PDF'}
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/pdf"
-              className={styles.hidden}
-              onChange={e => handlePdfUpload(e.target.files[0])}
-            />
-          </div>
-          {resources.length === 0 ? (
-            <p className={styles.empty}>No resources yet.</p>
-          ) : (
+        <Section
+          title="Resources"
+          action={<button className={styles.action} onClick={() => setAdding(true)}>+ Add PDFs</button>}
+        >
+          {resources.length === 0 ? <Empty>No resources in this corpus yet.</Empty> : (
             <ul className={styles.list}>
               {resources.map(r => (
-                <li key={r.id} className={styles.resourceRow}>
-                  <span className={styles.resourceName}>{r.name}</span>
-                  <span className={styles.meta}>{fmtSize(r.size_bytes)}</span>
-                  <span className={styles.meta}>{fmtDate(r.created_at)}</span>
-                  <RowDeleteButton label={`Delete ${r.name}`} onClick={() => confirmDeleteResource(r)} />
+                <li key={r.id} className={styles.item}>
+                  <Link to={`/resource/${r.id}`} className={styles.row}>
+                    <span className={styles.name}>{r.name}</span>
+                    <span className={styles.meta}>{fmtSize(r.size_bytes)}</span>
+                  </Link>
+                  <RowAction
+                    label={`Remove ${r.name} from this corpus`}
+                    onClick={() => run(() => unlinkResource(supabase, id, r.id))}
+                  >
+                    Remove
+                  </RowAction>
+                  <RowDeleteButton
+                    label={`Delete ${r.name}`}
+                    onClick={async () => confirm(
+                      'Delete PDF',
+                      await resourceDeleteMessage(supabase, r),
+                      () => deleteResource(supabase, r.id),
+                    )}
+                  />
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Section>
 
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Studies</h2>
-            {resources.length > 0 && (
-              <button className={styles.action} onClick={() => setCreatingStudy(true)}>
-                + New study
-              </button>
-            )}
-          </div>
-          {studies.length === 0 ? (
-            <p className={styles.empty}>No studies yet.</p>
-          ) : (
+        <Section
+          title="Studies"
+          action={
+            <>
+              <button className={styles.action} onClick={openLinkStudy}>Link existing</button>
+              <Link className={styles.action} to={`/study/new?corpus=${id}`}>+ New study</Link>
+            </>
+          }
+        >
+          {studies.length === 0 ? <Empty>No studies in this corpus yet.</Empty> : (
             <ul className={styles.list}>
               {studies.map(s => {
                 const sessions = s.reading_sessions ?? []
-                const completed = sessions.filter(r => r.completed).length
                 return (
                   <li key={s.id} className={styles.item}>
-                    <Link to={`/corpus/${id}/study/${s.id}`} className={styles.studyRow}>
-                      <div className={styles.studyInfo}>
-                        <span className={styles.studyName}>{s.name}</span>
-                        <span className={styles.studyDoc}>{s.resources?.name}</span>
+                    <Link to={`/study/${s.id}`} className={styles.row}>
+                      <div className={styles.rowMain}>
+                        <span className={styles.name}>{s.name}</span>
+                        <span className={styles.sub}>{s.resources?.name}</span>
                       </div>
                       {sessions.length > 0 && (
-                        <ProgressBar completed={completed} total={sessions.length} />
+                        <ProgressBar completed={sessions.filter(r => r.completed).length} total={sessions.length} />
                       )}
                       <span className={styles.arrow}>→</span>
                     </Link>
-                    <RowDeleteButton label={`Delete ${s.name}`} onClick={() => confirmDeleteStudy(s)} />
+                    <RowAction
+                      label={`Remove ${s.name} from this corpus`}
+                      onClick={() => run(() => setStudyCorpus(supabase, s.id, null))}
+                    >
+                      Remove
+                    </RowAction>
+                    <RowDeleteButton
+                      label={`Delete ${s.name}`}
+                      onClick={() => confirm(
+                        'Delete study',
+                        sessions.length
+                          ? `“${s.name}” will be deleted, along with ${plural(sessions.length, 'reading session')} and their notes. The PDF is kept.`
+                          : `“${s.name}” will be deleted. The PDF is kept.`,
+                        () => deleteStudy(supabase, s.id),
+                      )}
+                    />
                   </li>
                 )
               })}
             </ul>
           )}
-        </section>
+        </Section>
       </main>
+
+      {adding && (
+        <Modal title="Add PDFs to corpus" onClose={() => { setAdding(false); setToAdd([]) }}>
+          <div className={styles.form}>
+            <ResourcePicker
+              multiple
+              value={toAdd}
+              onChange={setToAdd}
+              excludeIds={resources.map(r => r.id)}
+            />
+            <button className={styles.submit} onClick={addResources} disabled={toAdd.length === 0}>
+              {toAdd.length ? `Add ${plural(toAdd.length, 'PDF')}` : 'Add'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {linkCandidates && (
+        <ChooseModal
+          title="Link a study to this corpus"
+          emptyText="All your studies are already in this corpus."
+          items={linkCandidates.map(s => ({
+            id: s.id,
+            label: s.name,
+            sub: [s.resources?.name, s.corpora && `moves from ${s.corpora.name}`].filter(Boolean).join(' · '),
+          }))}
+          onChoose={async (item) => {
+            await setStudyCorpus(supabase, item.id, id)
+            setLinkCandidates(null)
+            load()
+          }}
+          onClose={() => setLinkCandidates(null)}
+        />
+      )}
 
       {pendingDelete && (
         <ConfirmDelete
@@ -235,35 +233,6 @@ export default function CorpusPage() {
           onConfirm={pendingDelete.run}
           onClose={() => setPendingDelete(null)}
         />
-      )}
-
-      {creatingStudy && (
-        <Modal title="New study" onClose={() => { setCreatingStudy(false); setStudyName(''); setStudyResourceId(''); setError(null) }}>
-          <form onSubmit={createStudy} className={styles.form}>
-            <input
-              className={styles.input}
-              placeholder="Study name"
-              value={studyName}
-              onChange={e => setStudyName(e.target.value)}
-              autoFocus
-            />
-            <select
-              className={styles.select}
-              value={studyResourceId}
-              onChange={e => setStudyResourceId(e.target.value)}
-              required
-            >
-              <option value="">Select a document…</option>
-              {resources.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-            {error && <p className={styles.error}>{error}</p>}
-            <button className={styles.submit} type="submit" disabled={!studyName.trim() || !studyResourceId}>
-              Create
-            </button>
-          </form>
-        </Modal>
       )}
     </div>
   )

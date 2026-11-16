@@ -34,41 +34,34 @@ function fakeSupabase({ rows = [], deleteCount = 1, deleteError = null, removeEr
 }
 
 describe('deleteCorpus', () => {
-  it('deletes the corpus row, then removes its PDFs from storage', async () => {
-    const sb = fakeSupabase({ rows: [{ storage_path: 'u/c/a.pdf' }, { storage_path: 'u/c/b.pdf' }] })
+  it('deletes only the corpus row; resources and their files are kept', async () => {
+    const sb = fakeSupabase({ rows: [{ storage_path: 'u/c/a.pdf' }] })
     await deleteCorpus(sb, 'c')
-    const kinds = sb.calls.map(c => c[0])
-    expect(kinds).toEqual(['select', 'delete', 'remove'])
-    expect(sb.calls[1]).toEqual(['delete', 'corpora', 'id', 'c'])
-    expect(sb.remove).toHaveBeenCalledWith(['u/c/a.pdf', 'u/c/b.pdf'])
-  })
-
-  it('skips storage when the corpus has no PDFs', async () => {
-    const sb = fakeSupabase({ rows: [] })
-    await deleteCorpus(sb, 'c')
+    expect(sb.calls).toEqual([['delete', 'corpora', 'id', 'c']])
     expect(sb.remove).not.toHaveBeenCalled()
+  })
+})
+
+describe('deleteResource', () => {
+  it('deletes the row, then removes its file', async () => {
+    const sb = fakeSupabase({ rows: [{ storage_path: 'u/f/a.pdf' }] })
+    await deleteResource(sb, 'r')
+    expect(sb.calls.map(c => c[0])).toEqual(['select', 'delete', 'remove'])
+    expect(sb.calls).toContainEqual(['delete', 'resources', 'id', 'r'])
+    expect(sb.remove).toHaveBeenCalledWith(['u/f/a.pdf'])
   })
 
   it('does not touch storage if the row delete fails', async () => {
     const sb = fakeSupabase({ rows: [{ storage_path: 'x' }], deleteError: new Error('denied') })
-    await expect(deleteCorpus(sb, 'c')).rejects.toThrow('denied')
+    await expect(deleteResource(sb, 'r')).rejects.toThrow('denied')
     expect(sb.remove).not.toHaveBeenCalled()
   })
 
   it('still succeeds if storage cleanup fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const sb = fakeSupabase({ rows: [{ storage_path: 'x' }], removeError: new Error('nope') })
-    await expect(deleteCorpus(sb, 'c')).resolves.toBeUndefined()
+    await expect(deleteResource(sb, 'r')).resolves.toBeUndefined()
     warn.mockRestore()
-  })
-})
-
-describe('deleteResource', () => {
-  it('deletes the row and its file', async () => {
-    const sb = fakeSupabase({ rows: [{ storage_path: 'u/c/a.pdf' }] })
-    await deleteResource(sb, 'r')
-    expect(sb.calls).toContainEqual(['delete', 'resources', 'id', 'r'])
-    expect(sb.remove).toHaveBeenCalledWith(['u/c/a.pdf'])
   })
 })
 
@@ -77,10 +70,10 @@ describe('row deletes', () => {
     await expect(deleteStudy(fakeSupabase({ deleteCount: 0 }), 's')).rejects.toThrow(/Nothing was deleted/)
   })
 
-  it('treats a missing note as already deleted', async () => {
-    const sb = fakeSupabase({ deleteCount: 0 })
-    await expect(deleteNote(sb, 'session-1')).resolves.toBeUndefined()
-    expect(sb.calls).toContainEqual(['delete', 'notes', 'reading_session_id', 'session-1'])
+  it('deletes notes by note id', async () => {
+    const sb = fakeSupabase()
+    await deleteNote(sb, 'note-1')
+    expect(sb.calls).toContainEqual(['delete', 'notes', 'id', 'note-1'])
   })
 })
 

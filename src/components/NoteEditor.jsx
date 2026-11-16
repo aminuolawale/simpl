@@ -3,47 +3,82 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { supabase } from '../lib/supabase'
 import { deleteNote } from '../lib/deletion'
+import { currentUserId } from '../lib/resources'
 import ConfirmDelete from './ConfirmDelete'
 import styles from './NoteEditor.module.css'
 
 const SAVE_DELAY = 1000
 
-export default function NoteEditor({ sessionId, initialContent }) {
+// Autosaving rich-text note. Saves by note id; if there is no note yet
+// (`noteId` null), the first edit inserts one using the `newNote` columns,
+// e.g. { reading_session_id, resource_id }.
+// `deletable` shows a "Delete note" button that clears the editor afterwards.
+export default function NoteEditor({ noteId = null, initialContent, newNote = {}, deletable = false, onCreated }) {
   const saveTimer = useRef(null)
   const statusRef = useRef(null)
-  const inFlight = useRef(Promise.resolve())
+  const idRef = useRef(noteId)
+  const queue = useRef(Promise.resolve()) // saves run one at a time, in order
+  const latest = useRef({ newNote, onCreated })
+  latest.current = { newNote, onCreated }
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+
+  const setStatus = (text) => { if (statusRef.current) statusRef.current.textContent = text }
+
+  const save = (content) => {
+    queue.current = queue.current.then(async () => {
+      const updated_at = new Date().toISOString()
+      let error
+      if (idRef.current) {
+        ({ error } = await supabase.from('notes').update({ content, updated_at }).eq('id', idRef.current))
+      } else {
+        const user_id = await currentUserId(supabase)
+        let data
+        ;({ data, error } = await supabase
+          .from('notes')
+          .insert({ ...latest.current.newNote, user_id, content, updated_at })
+          .select('id')
+          .single())
+        if (data) {
+          idRef.current = data.id
+          latest.current.onCreated?.(data.id)
+        }
+      }
+      setStatus(error ? 'Error saving' : 'Saved')
+    })
+    return queue.current
+  }
 
   const editor = useEditor({
     extensions: [StarterKit],
     content: initialContent ?? '',
     onUpdate: ({ editor }) => {
       clearTimeout(saveTimer.current)
-      if (statusRef.current) statusRef.current.textContent = 'Saving…'
+      setStatus('Saving…')
       saveTimer.current = setTimeout(() => {
-        inFlight.current = (async () => {
-          const { error } = await supabase.from('notes').upsert(
-            { reading_session_id: sessionId, content: editor.getJSON(), updated_at: new Date().toISOString() },
-            { onConflict: 'reading_session_id' }
-          )
-          if (statusRef.current) {
-            statusRef.current.textContent = error ? 'Error saving' : 'Saved'
-          }
-        })()
+        saveTimer.current = null
+        save(editor.getJSON())
       }, SAVE_DELAY)
     },
   })
 
-  useEffect(() => () => clearTimeout(saveTimer.current), [])
+  // Flush a pending save when leaving the page so the last edits aren't lost.
+  useEffect(() => () => {
+    if (saveTimer.current && editor) {
+      clearTimeout(saveTimer.current)
+      save(editor.getJSON())
+    }
+  }, [editor])
 
   const removeNote = async () => {
-    // Drop any pending autosave and let an in-progress one finish first,
-    // so it can't recreate the note after we delete it.
+    // Drop any pending autosave and let in-progress ones finish first,
+    // so they can't recreate the note after we delete it.
     clearTimeout(saveTimer.current)
-    await inFlight.current
-    await deleteNote(supabase, sessionId)
+    saveTimer.current = null
+    await queue.current
+    if (idRef.current) await deleteNote(supabase, idRef.current)
+    idRef.current = null
     editor?.commands.setContent('', { emitUpdate: false })
-    if (statusRef.current) statusRef.current.textContent = 'Deleted'
+    setStatus('Deleted')
     setConfirmingDelete(false)
   }
 
@@ -66,17 +101,19 @@ export default function NoteEditor({ sessionId, initialContent }) {
           title="Bullet list"
         >—</button>
         <span ref={statusRef} className={styles.status} />
-        <button
-          className={styles.deleteBtn}
-          onClick={() => setConfirmingDelete(true)}
-          title="Delete note"
-        >Delete note</button>
+        {deletable && (
+          <button
+            className={styles.deleteBtn}
+            onClick={() => setConfirmingDelete(true)}
+            title="Delete note"
+          >Delete note</button>
+        )}
       </div>
       <EditorContent editor={editor} className={styles.editor} />
       {confirmingDelete && (
         <ConfirmDelete
           title="Delete note"
-          message="This session's note will be deleted. The session is kept."
+          message="This note will be deleted. The session is kept."
           onConfirm={removeNote}
           onClose={() => setConfirmingDelete(false)}
         />

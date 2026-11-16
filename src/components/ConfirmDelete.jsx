@@ -38,9 +38,10 @@ export default function ConfirmDelete({ title, message, onConfirm, onClose }) {
   )
 }
 
-// Small inline "Delete" button for list rows. Hidden until the row is hovered
-// (always visible on touch devices).
-export function RowDeleteButton({ onClick, label }) {
+// Small inline action button for list rows (e.g. "Remove", "Delete"). Hidden
+// until the row is hovered (always visible on touch devices). Must be a direct
+// child of the row's <li>.
+export function RowAction({ onClick, label, children }) {
   return (
     <button
       type="button"
@@ -49,7 +50,11 @@ export function RowDeleteButton({ onClick, label }) {
       aria-label={label}
       title={label}
     >
-      Delete
+      {children}
     </button>
   )
+}
+
+export function RowDeleteButton({ onClick, label }) {
+  return <RowAction onClick={onClick} label={label}>Delete</RowAction>
 }

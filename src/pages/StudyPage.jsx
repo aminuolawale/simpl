@@ -2,159 +2,121 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { calcProgress } from '../lib/progress'
-import { flattenOutline, sectionsAfter, isValidRange, sectionPage } from '../lib/sections'
+import { currentUserId } from '../lib/resources'
+import { setSessionStudy } from '../lib/links'
+import { deleteStudy, deleteSession, deleteNote, plural } from '../lib/deletion'
+import { notePreview } from '../lib/notes'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
+import ChooseModal from '../components/ChooseModal'
 import ProgressBar from '../components/ProgressBar'
-import ConfirmDelete, { RowDeleteButton } from '../components/ConfirmDelete'
-import { deleteStudy, deleteSession, deleteNote, plural } from '../lib/deletion'
-import styles from './StudyPage.module.css'
+import SessionForm from '../components/SessionForm'
+import Section, { Empty } from '../components/Section'
+import ConfirmDelete, { RowAction, RowDeleteButton } from '../components/ConfirmDelete'
+import styles from '../styles/page.module.css'
 
 export default function StudyPage() {
-  const { id: corpusId, studyId } = useParams()
+  const { studyId } = useParams()
   const navigate = useNavigate()
   const [study, setStudy] = useState(null)
-  const [corpus, setCorpus] = useState(null)
   const [sessions, setSessions] = useState([])
   const [notes, setNotes] = useState([])
-  const [outline, setOutline] = useState([])
   const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ name: '', startSection: '', endSection: '', startPage: '', endPage: '' })
-  const [usePageNumbers, setUsePageNumbers] = useState(false)
   const [error, setError] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(null) // { name, corpusId, corpora }
+  const [sessionCandidates, setSessionCandidates] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null) // { title, message, run }
 
   const load = async () => {
-    const [
-      { data: studyData },
-      { data: corpusData },
-      { data: sessionData },
-    ] = await Promise.all([
-      supabase.from('studies').select('id, name, resource_id, resources(name, outline)').eq('id', studyId).single(),
-      supabase.from('corpora').select('id, name').eq('id', corpusId).single(),
+    const [{ data: studyData }, { data: sessionData }] = await Promise.all([
+      supabase.from('studies')
+        .select('id, name, corpus_id, resource_id, corpora(id, name), resources(id, name, outline)')
+        .eq('id', studyId)
+        .single(),
       supabase.from('reading_sessions').select('*').eq('study_id', studyId).order('created_at'),
     ])
-
     setStudy(studyData)
-    setCorpus(corpusData)
     setSessions(sessionData ?? [])
-    setOutline(studyData?.resources?.outline ?? [])
 
-    // Load notes only if there are sessions
     const sessionIds = (sessionData ?? []).map(s => s.id)
     if (sessionIds.length > 0) {
       const { data: noteData } = await supabase
         .from('notes')
-        .select('content, reading_session_id, updated_at')
+        .select('id, content, reading_session_id')
         .in('reading_session_id', sessionIds)
       setNotes(noteData ?? [])
     } else {
       setNotes([])
     }
-
     setLoading(false)
   }
 
   useEffect(() => { load() }, [studyId])
 
-  const flat = flattenOutline(outline)
-  const endSections = form.startSection ? sectionsAfter(outline, form.startSection) : flat
-
-  const createSession = async (e) => {
-    e.preventDefault()
+  const run = async (action) => {
     setError(null)
-
-    let startPage, endPage, startSection, endSection
-
-    if (usePageNumbers || flat.length === 0) {
-      startPage = parseInt(form.startPage)
-      endPage = parseInt(form.endPage)
-      if (!startPage || !endPage || endPage <= startPage) {
-        setError('End page must be greater than start page.')
-        return
-      }
-    } else {
-      if (!isValidRange(outline, form.startSection, form.endSection)) {
-        setError('End section must come after start section.')
-        return
-      }
-      startSection = form.startSection
-      endSection = form.endSection
-      startPage = sectionPage(outline, startSection) ?? 1
-      endPage = sectionPage(outline, endSection) ?? startPage + 1
+    try {
+      await action()
+      await load()
+    } catch (e) {
+      setError(e.message)
     }
+  }
 
-    const { error } = await supabase.from('reading_sessions').insert({
-      study_id: studyId,
-      name: form.name.trim() || `${startSection ?? `p.${startPage}`} → ${endSection ?? `p.${endPage}`}`,
-      start_section: startSection ?? null,
-      end_section: endSection ?? null,
-      start_page: startPage,
-      end_page: endPage,
+  const confirm = (title, message, action) =>
+    setPendingDelete({
+      title,
+      message,
+      run: async () => {
+        await action()
+        setPendingDelete(null)
+        load()
+      },
     })
-    if (error) { setError(error.message); return }
-    setForm({ name: '', startSection: '', endSection: '', startPage: '', endPage: '' })
+
+  const noteFor = (sessionId) => notes.find(n => n.reading_session_id === sessionId)
+
+  const createSession = async (values) => {
+    const user_id = await currentUserId(supabase)
+    const { error } = await supabase.from('reading_sessions').insert({
+      ...values,
+      user_id,
+      study_id: studyId,
+      resource_id: study.resource_id,
+    })
+    if (error) throw error
     setCreating(false)
     load()
   }
 
-  const afterDelete = async () => {
-    setPendingDelete(null)
-    await load()
+  const openEdit = async () => {
+    const { data } = await supabase.from('corpora').select('id, name').order('name')
+    setEditing({ name: study.name, corpusId: study.corpus_id ?? '', corpora: data ?? [] })
   }
 
-  const confirmDeleteStudy = () => {
-    setPendingDelete({
-      title: 'Delete study',
-      message: sessions.length
-        ? `“${study?.name}” will be deleted, along with ${plural(sessions.length, 'reading session')} and their notes. The PDF is kept.`
-        : `“${study?.name}” will be deleted. The PDF is kept.`,
-      run: async () => {
-        await deleteStudy(supabase, studyId)
-        navigate(`/corpus/${corpusId}`)
-      },
+  const saveEdit = async (e) => {
+    e.preventDefault()
+    if (!editing.name.trim()) return
+    await run(async () => {
+      const { error } = await supabase
+        .from('studies')
+        .update({ name: editing.name.trim(), corpus_id: editing.corpusId || null })
+        .eq('id', studyId)
+      if (error) throw error
     })
+    setEditing(null)
   }
 
-  const confirmDeleteSession = (s) => {
-    setPendingDelete({
-      title: 'Delete reading session',
-      message: noteFor(s.id)
-        ? `“${s.name}” and its note will be deleted.`
-        : `“${s.name}” will be deleted.`,
-      run: async () => {
-        await deleteSession(supabase, s.id)
-        await afterDelete()
-      },
-    })
-  }
-
-  const confirmDeleteNote = (s) => {
-    setPendingDelete({
-      title: 'Delete note',
-      message: `The note for “${s.name}” will be deleted. The session is kept.`,
-      run: async () => {
-        await deleteNote(supabase, s.id)
-        await afterDelete()
-      },
-    })
-  }
-
-  const noteFor = (sessionId) => notes.find(n => n.reading_session_id === sessionId)
-
-  const previewText = (content) => {
-    if (!content?.content) return ''
-    const texts = []
-    const walk = (nodes) => {
-      for (const n of nodes ?? []) {
-        if (n.text) texts.push(n.text)
-        if (n.content) walk(n.content)
-      }
-    }
-    walk(content.content)
-    const full = texts.join(' ')
-    return full.length > 120 ? full.slice(0, 120) + '…' : full
+  const openAddSession = async () => {
+    const { data, error } = await supabase
+      .from('reading_sessions')
+      .select('id, name, start_page, end_page')
+      .is('study_id', null)
+      .eq('resource_id', study.resource_id)
+      .order('created_at', { ascending: false })
+    if (error) { setError(error.message); return }
+    setSessionCandidates(data ?? [])
   }
 
   if (loading) return <div className={styles.root}><AppBar /></div>
@@ -165,72 +127,160 @@ export default function StudyPage() {
     <div className={styles.root}>
       <AppBar
         crumbs={[
-          { label: corpus?.name, to: `/corpus/${corpusId}` },
+          ...(study?.corpora ? [{ label: study.corpora.name, to: `/corpus/${study.corpora.id}` }] : []),
           { label: study?.name },
         ]}
         actions={
-          <button className={styles.action} onClick={confirmDeleteStudy}>
-            Delete study
-          </button>
+          <>
+            <button className={styles.action} onClick={openEdit}>Edit</button>
+            <button
+              className={styles.action}
+              onClick={() => confirm(
+                'Delete study',
+                sessions.length
+                  ? `“${study?.name}” will be deleted, along with ${plural(sessions.length, 'reading session')} and their notes. The PDF is kept.`
+                  : `“${study?.name}” will be deleted. The PDF is kept.`,
+                async () => {
+                  await deleteStudy(supabase, studyId)
+                  navigate(study?.corpora ? `/corpus/${study.corpora.id}` : '/')
+                },
+              )}
+            >
+              Delete study
+            </button>
+          </>
         }
       />
       <main className={styles.main}>
-        <div className={styles.studyHeader}>
-          <h1 className={styles.studyTitle}>{study?.name}</h1>
-          <p className={styles.docName}>{study?.resources?.name}</p>
+        <div className={styles.header}>
+          <h1 className={styles.title}>{study?.name}</h1>
+          <p className={styles.subtitle}>
+            <Link to={`/resource/${study?.resource_id}`}>{study?.resources?.name}</Link>
+            {study?.corpora
+              ? <> · in <Link to={`/corpus/${study.corpora.id}`}>{study.corpora.name}</Link></>
+              : ' · not in a corpus'}
+          </p>
           {total > 0 && <ProgressBar completed={completed} total={total} />}
         </div>
+        {error && <p className={styles.error}>{error}</p>}
 
-        <section className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>Sessions</h2>
-            <button className={styles.action} onClick={() => setCreating(true)}>
-              + New session
-            </button>
-          </div>
-          {sessions.length === 0 ? (
-            <p className={styles.empty}>No sessions yet.</p>
-          ) : (
+        <Section
+          title="Sessions"
+          action={
+            <>
+              <button className={styles.action} onClick={openAddSession}>Add existing</button>
+              <button className={styles.action} onClick={() => setCreating(true)}>+ New session</button>
+            </>
+          }
+        >
+          {sessions.length === 0 ? <Empty>No sessions yet.</Empty> : (
             <ul className={styles.list}>
               {sessions.map(s => (
                 <li key={s.id} className={styles.item}>
-                  <Link to={`/corpus/${corpusId}/study/${studyId}/session/${s.id}`} className={styles.sessionRow}>
+                  <Link to={`/session/${s.id}`} className={styles.row}>
                     <span className={styles.status}>{s.completed ? '✓' : '○'}</span>
-                    <span className={styles.sessionName}>{s.name}</span>
-                    <span className={styles.pages}>pp. {s.start_page}–{s.end_page}</span>
+                    <span className={styles.name}>{s.name}</span>
+                    <span className={styles.meta}>pp. {s.start_page}–{s.end_page}</span>
                     <span className={styles.arrow}>→</span>
                   </Link>
-                  <RowDeleteButton label={`Delete ${s.name}`} onClick={() => confirmDeleteSession(s)} />
+                  <RowAction
+                    label={`Remove ${s.name} from this study`}
+                    onClick={() => run(() => setSessionStudy(supabase, s.id, null))}
+                  >
+                    Remove
+                  </RowAction>
+                  <RowDeleteButton
+                    label={`Delete ${s.name}`}
+                    onClick={() => confirm(
+                      'Delete reading session',
+                      noteFor(s.id) ? `“${s.name}” and its note will be deleted.` : `“${s.name}” will be deleted.`,
+                      () => deleteSession(supabase, s.id),
+                    )}
+                  />
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Section>
 
-        {notes.length > 0 && (
-          <section className={styles.section}>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Notes</h2>
-            </div>
+        {notes.some(n => notePreview(n.content)) && (
+          <Section title="Notes">
             <ul className={styles.list}>
-              {sessions.filter(s => noteFor(s.id)).map(s => {
+              {sessions.map(s => {
                 const note = noteFor(s.id)
-                const preview = previewText(note.content)
+                const preview = notePreview(note?.content)
                 if (!preview) return null
                 return (
                   <li key={s.id} className={styles.item}>
-                    <Link to={`/corpus/${corpusId}/study/${studyId}/session/${s.id}`} className={styles.noteRow}>
-                      <span className={styles.noteSession}>{s.name}</span>
-                      <p className={styles.notePreview}>{preview}</p>
+                    <Link to={`/session/${s.id}`} className={styles.row}>
+                      <div className={styles.rowMain}>
+                        <span className={styles.sub}>{s.name}</span>
+                        <p className={styles.preview}>{preview}</p>
+                      </div>
                     </Link>
-                    <RowDeleteButton label={`Delete note for ${s.name}`} onClick={() => confirmDeleteNote(s)} />
+                    <RowDeleteButton
+                      label={`Delete note for ${s.name}`}
+                      onClick={() => confirm(
+                        'Delete note',
+                        `The note for “${s.name}” will be deleted. The session is kept.`,
+                        () => deleteNote(supabase, note.id),
+                      )}
+                    />
                   </li>
                 )
               })}
             </ul>
-          </section>
+          </Section>
         )}
       </main>
+
+      {creating && (
+        <Modal title="New reading session" onClose={() => setCreating(false)}>
+          <SessionForm outline={study?.resources?.outline ?? []} onSubmit={createSession} />
+        </Modal>
+      )}
+
+      {editing && (
+        <Modal title="Edit study" onClose={() => setEditing(null)}>
+          <form onSubmit={saveEdit} className={styles.form}>
+            <div className={styles.field}>
+              <label className={styles.label}>Name</label>
+              <input
+                className={styles.input}
+                value={editing.name}
+                onChange={e => setEditing(ed => ({ ...ed, name: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Corpus</label>
+              <select
+                className={styles.select}
+                value={editing.corpusId}
+                onChange={e => setEditing(ed => ({ ...ed, corpusId: e.target.value }))}
+              >
+                <option value="">None (standalone study)</option>
+                {editing.corpora.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <button className={styles.submit} type="submit" disabled={!editing.name.trim()}>Save</button>
+          </form>
+        </Modal>
+      )}
+
+      {sessionCandidates && (
+        <ChooseModal
+          title="Add an existing session"
+          emptyText={`No standalone sessions read “${study?.resources?.name}”.`}
+          items={sessionCandidates.map(s => ({ id: s.id, label: s.name, sub: `pp. ${s.start_page}–${s.end_page}` }))}
+          onChoose={async (item) => {
+            await setSessionStudy(supabase, item.id, studyId)
+            setSessionCandidates(null)
+            load()
+          }}
+          onClose={() => setSessionCandidates(null)}
+        />
+      )}
 
       {pendingDelete && (
         <ConfirmDelete
@@ -239,59 +289,6 @@ export default function StudyPage() {
           onConfirm={pendingDelete.run}
           onClose={() => setPendingDelete(null)}
         />
-      )}
-
-      {creating && (
-        <Modal
-          title="New reading session"
-          onClose={() => { setCreating(false); setForm({ name: '', startSection: '', endSection: '', startPage: '', endPage: '' }); setError(null) }}
-        >
-          <form onSubmit={createSession} className={styles.form}>
-            <input
-              className={styles.input}
-              placeholder="Session name (optional)"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              autoFocus
-            />
-            {flat.length > 0 && (
-              <button type="button" className={styles.toggle} onClick={() => setUsePageNumbers(p => !p)}>
-                {usePageNumbers ? 'Use sections instead' : 'Use page numbers instead'}
-              </button>
-            )}
-            {(usePageNumbers || flat.length === 0) ? (
-              <div className={styles.row}>
-                <div className={styles.field}>
-                  <label className={styles.label}>From page</label>
-                  <input className={styles.input} type="number" min="1" value={form.startPage} onChange={e => setForm(f => ({ ...f, startPage: e.target.value }))} />
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label}>To page</label>
-                  <input className={styles.input} type="number" min="1" value={form.endPage} onChange={e => setForm(f => ({ ...f, endPage: e.target.value }))} />
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className={styles.field}>
-                  <label className={styles.label}>From</label>
-                  <select className={styles.select} value={form.startSection} onChange={e => setForm(f => ({ ...f, startSection: e.target.value, endSection: '' }))}>
-                    <option value="">Select section…</option>
-                    {flat.map((s, i) => <option key={i} value={s.title}>{s.title}</option>)}
-                  </select>
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label}>To</label>
-                  <select className={styles.select} value={form.endSection} onChange={e => setForm(f => ({ ...f, endSection: e.target.value }))} disabled={!form.startSection}>
-                    <option value="">Select section…</option>
-                    {endSections.map((s, i) => <option key={i} value={s.title}>{s.title}</option>)}
-                  </select>
-                </div>
-              </>
-            )}
-            {error && <p className={styles.error}>{error}</p>}
-            <button className={styles.submit} type="submit">Create</button>
-          </form>
-        </Modal>
       )}
     </div>
   )

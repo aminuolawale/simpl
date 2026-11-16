@@ -1,16 +1,19 @@
-// Deletion helpers. The database cascades child rows (see 001_schema.sql):
-//   corpora → resources → studies → reading_sessions → notes
+// Deletion helpers. What the database cascades (see 002_standalone_entities.sql):
+//   corpus   → only its links to resources; its studies become standalone
+//   resource → studies and sessions that read it; notes keep living without it
+//   study    → its sessions → their notes
+//   session  → its note
 // Storage objects are not cascaded, so PDFs are removed explicitly.
 
 const BUCKET = 'resources'
 
-async function deleteRow(supabase, table, column, value, { allowMissing = false } = {}) {
+async function deleteRow(supabase, table, column, value) {
   const { error, count } = await supabase
     .from(table)
     .delete({ count: 'exact' })
     .eq(column, value)
   if (error) throw error
-  if (count === 0 && !allowMissing) throw new Error('Nothing was deleted. It may already be gone.')
+  if (count === 0) throw new Error('Nothing was deleted. It may already be gone.')
 }
 
 // Best effort: the row is already gone, so a leftover file must not block the UI.
@@ -21,15 +24,8 @@ async function removeFiles(supabase, paths) {
   if (error) console.warn('Could not remove stored files', unique, error)
 }
 
-export async function deleteCorpus(supabase, corpusId) {
-  const { data, error } = await supabase
-    .from('resources')
-    .select('storage_path')
-    .eq('corpus_id', corpusId)
-  if (error) throw error
-  await deleteRow(supabase, 'corpora', 'id', corpusId)
-  await removeFiles(supabase, (data ?? []).map(r => r.storage_path))
-}
+export const deleteCorpus = (supabase, corpusId) =>
+  deleteRow(supabase, 'corpora', 'id', corpusId)
 
 export async function deleteResource(supabase, resourceId) {
   const { data, error } = await supabase
@@ -48,9 +44,23 @@ export const deleteStudy = (supabase, studyId) =>
 export const deleteSession = (supabase, sessionId) =>
   deleteRow(supabase, 'reading_sessions', 'id', sessionId)
 
-// A session may never have had a note saved; that still counts as deleted.
-export const deleteNote = (supabase, sessionId) =>
-  deleteRow(supabase, 'notes', 'reading_session_id', sessionId, { allowMissing: true })
+export const deleteNote = (supabase, noteId) =>
+  deleteRow(supabase, 'notes', 'id', noteId)
 
 // For confirmation messages: plural(2, 'study', 'studies') → '2 studies'
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+// Builds the confirmation message for deleting a resource, which also removes
+// the studies and reading sessions that read it.
+export async function resourceDeleteMessage(supabase, resource) {
+  const [{ count: studies }, { count: sessions }] = await Promise.all([
+    supabase.from('studies').select('id', { count: 'exact', head: true }).eq('resource_id', resource.id),
+    supabase.from('reading_sessions').select('id', { count: 'exact', head: true }).eq('resource_id', resource.id),
+  ])
+  const parts = []
+  if (studies) parts.push(plural(studies, 'study', 'studies'))
+  if (sessions) parts.push(plural(sessions, 'reading session'))
+  return parts.length
+    ? `“${resource.name}” will be deleted everywhere, along with ${parts.join(' and ')} that read it and their notes.`
+    : `“${resource.name}” will be deleted everywhere it is used.`
+}
