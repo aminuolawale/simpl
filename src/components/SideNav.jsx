@@ -15,8 +15,8 @@ function writeCollapsed(value) {
   try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(value)) } catch {}
 }
 
-// Lists every entity the user has, grouped by kind. Sessions and notes show
-// only standalone ones; the rest live on their study's page.
+// Lists the user's corpora, studies, standalone notes and resources. Reading
+// sessions only exist inside studies, so they're reached from the study page.
 export default function SideNav({ open = false, onClose }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -27,17 +27,15 @@ export default function SideNav({ open = false, onClose }) {
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    const [corpora, studies, sessions, notes, resources] = await Promise.all([
+    const [corpora, studies, notes, resources] = await Promise.all([
       supabase.from('corpora').select('id, name').order('name'),
       supabase.from('studies').select('id, name').order('name'),
-      supabase.from('reading_sessions').select('id, name, completed').is('study_id', null).order('created_at', { ascending: false }),
       supabase.from('notes').select('id, title').is('reading_session_id', null).order('updated_at', { ascending: false }),
       supabase.from('resources').select('id, name').order('name'),
     ])
     setData({
       corpora: corpora.data ?? [],
       studies: studies.data ?? [],
-      sessions: sessions.data ?? [],
       notes: notes.data ?? [],
       resources: resources.data ?? [],
     })
@@ -72,9 +70,6 @@ export default function SideNav({ open = false, onClose }) {
       add: { label: 'New corpus', onClick: () => navigate('/corpus/new') } },
     { key: 'studies', title: 'Studies', items: data?.studies, to: s => `/study/${s.id}`, label: s => s.name,
       add: { label: 'New study', onClick: () => navigate('/study/new') } },
-    { key: 'sessions', title: 'Reading sessions', items: data?.sessions, to: s => `/session/${s.id}`,
-      label: s => `${s.completed ? '✓ ' : ''}${s.name}`,
-      add: { label: 'New reading session', onClick: () => navigate('/session/new') } },
     { key: 'notes', title: 'Notes', items: data?.notes, to: n => `/note/${n.id}`, label: noteTitle,
       add: { label: 'New note', onClick: newNote, busy: busy === 'note' } },
     { key: 'resources', title: 'Resources', items: data?.resources, to: r => `/resource/${r.id}`, label: r => r.name,

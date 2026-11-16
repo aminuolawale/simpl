@@ -97,9 +97,9 @@ export default function NotePage() {
   const openSessionChoices = async () => {
     let query = supabase
       .from('reading_sessions')
-      .select('id, name, resource_id, resources(name), studies(name), notes(id)')
+      .select('id, name, studies!inner(name, resource_id, resources(name)), notes(id)')
       .order('created_at', { ascending: false })
-    if (note.resource_id) query = query.eq('resource_id', note.resource_id)
+    if (note.resource_id) query = query.eq('studies.resource_id', note.resource_id)
     const { data, error } = await query
     if (error) { setError(error.message); return }
     const hasNote = (s) => Array.isArray(s.notes) ? s.notes.length > 0 : !!s.notes
@@ -107,8 +107,8 @@ export default function NotePage() {
       (data ?? []).filter(s => !hasNote(s)).map(s => ({
         id: s.id,
         label: s.name,
-        sub: [s.resources?.name, s.studies ? `in ${s.studies.name}` : 'standalone'].filter(Boolean).join(' · '),
-        resourceId: s.resource_id,
+        sub: [`in ${s.studies.name}`, s.studies.resources?.name].filter(Boolean).join(' · '),
+        resourceId: s.studies.resource_id,
       }))
     )
   }

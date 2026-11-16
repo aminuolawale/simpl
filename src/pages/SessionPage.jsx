@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { getSignedUrl } from '../lib/storage'
-import { setSessionStudy } from '../lib/links'
 import { deleteSession } from '../lib/deletion'
 import { usePdf } from '../context/PdfContext'
 import AppBar from '../components/AppBar'
@@ -10,7 +9,6 @@ import TocDrawer from '../components/TocDrawer'
 import PageCanvas from '../components/PageCanvas'
 import SessionDock from '../components/SessionDock'
 import NoteEditor from '../components/NoteEditor'
-import ChooseModal from '../components/ChooseModal'
 import ConfirmDelete from '../components/ConfirmDelete'
 import styles from '../styles/reader.module.css'
 
@@ -24,11 +22,10 @@ export default function SessionPage() {
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [studyChoices, setStudyChoices] = useState(null)
 
   const loadSession = async () => {
     const { data } = await supabase.from('reading_sessions')
-      .select('*, resources(name, storage_path, outline), studies(id, name, corpora(id, name))')
+      .select('*, studies(id, name, resource_id, resources(name, storage_path, outline), corpora(id, name))')
       .eq('id', sessionId)
       .single()
     setSession(data)
@@ -45,10 +42,10 @@ export default function SessionPage() {
       setNote(noteData)
       setLoading(false) // show UI immediately — PDF loads in background below
 
-      const storagePath = sessionData?.resources?.storage_path
-      if (storagePath) {
-        const url = await getSignedUrl(supabase, storagePath)
-        loadPdfFromUrl(url, sessionData.start_page, sessionData.resources.outline)
+      const resource = sessionData?.studies?.resources
+      if (resource?.storage_path) {
+        const url = await getSignedUrl(supabase, resource.storage_path)
+        loadPdfFromUrl(url, sessionData.start_page, resource.outline)
       }
     }
     init()
@@ -64,24 +61,7 @@ export default function SessionPage() {
       completed: true,
       completed_at: new Date().toISOString(),
     }).eq('id', sessionId)
-    if (study) navigate(parentUrl)
-    else {
-      await loadSession()
-      setCompleting(false)
-    }
-  }
-
-  const openStudyChoices = async () => {
-    const { data } = await supabase
-      .from('studies')
-      .select('id, name, corpora(name)')
-      .eq('resource_id', session.resource_id)
-      .order('created_at', { ascending: false })
-    const others = (data ?? []).filter(s => s.id !== study?.id)
-    setStudyChoices([
-      ...(study ? [{ id: null, label: 'No study', sub: `Remove from “${study.name}” and keep it standalone` }] : []),
-      ...others.map(s => ({ id: s.id, label: s.name, sub: s.corpora ? `in ${s.corpora.name}` : 'Standalone study' })),
-    ])
+    navigate(parentUrl)
   }
 
   if (loading) return <div className={styles.root}><AppBar /></div>
@@ -96,9 +76,6 @@ export default function SessionPage() {
         ]}
         actions={
           <>
-            <button className={styles.complete} onClick={openStudyChoices} title="Move to a study">
-              {study ? `Study: ${study.name}` : 'Add to study'}
-            </button>
             {!session?.completed && (
               <button className={styles.complete} onClick={markComplete} disabled={completing}>
                 {completing ? 'Saving…' : 'Mark complete'}
@@ -120,7 +97,7 @@ export default function SessionPage() {
             key={sessionId}
             noteId={note?.id ?? null}
             initialContent={note?.content}
-            newNote={{ reading_session_id: sessionId, resource_id: session?.resource_id }}
+            newNote={{ reading_session_id: sessionId, resource_id: study?.resource_id }}
             deletable
           />
         </div>
@@ -131,20 +108,6 @@ export default function SessionPage() {
         startPage={session?.start_page}
         endPage={session?.end_page}
       />
-
-      {studyChoices && (
-        <ChooseModal
-          title={study ? 'Move to another study' : 'Add to a study'}
-          emptyText={`No studies read “${session?.resources?.name}”. Create one from the PDF's page first.`}
-          items={studyChoices}
-          onChoose={async (item) => {
-            await setSessionStudy(supabase, sessionId, item.id)
-            setStudyChoices(null)
-            loadSession()
-          }}
-          onClose={() => setStudyChoices(null)}
-        />
-      )}
 
       {confirmingDelete && (
         <ConfirmDelete

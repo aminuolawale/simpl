@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { linkResource, unlinkResource } from '../lib/links'
-import { deleteResource, resourceDeleteMessage } from '../lib/deletion'
+import { deleteResource, resourceDeleteMessage, plural } from '../lib/deletion'
 import { fmtSize, fmtDate } from '../lib/format'
 import AppBar from '../components/AppBar'
 import ChooseModal from '../components/ChooseModal'
@@ -16,7 +16,6 @@ export default function ResourcePage() {
   const [resource, setResource] = useState(null)
   const [corpora, setCorpora] = useState([])
   const [studies, setStudies] = useState([])
-  const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [corpusCandidates, setCorpusCandidates] = useState(null)
@@ -27,20 +26,17 @@ export default function ResourcePage() {
       { data: resourceData },
       { data: linkData },
       { data: studyData },
-      { data: sessionData },
     ] = await Promise.all([
       supabase.from('resources').select('id, name, size_bytes, created_at').eq('id', id).single(),
       supabase.from('corpus_resources').select('corpora(id, name)').eq('resource_id', id),
-      supabase.from('studies').select('id, name, corpora(name)').eq('resource_id', id).order('created_at'),
-      supabase.from('reading_sessions')
-        .select('id, name, start_page, end_page, completed, studies(name)')
+      supabase.from('studies')
+        .select('id, name, corpora(name), reading_sessions(id, completed)')
         .eq('resource_id', id)
         .order('created_at'),
     ])
     setResource(resourceData)
     setCorpora((linkData ?? []).map(l => l.corpora).filter(Boolean))
     setStudies(studyData ?? [])
-    setSessions(sessionData ?? [])
     setLoading(false)
   }
 
@@ -114,7 +110,12 @@ export default function ResourcePage() {
                   <Link to={`/study/${s.id}`} className={styles.row}>
                     <div className={styles.rowMain}>
                       <span className={styles.name}>{s.name}</span>
-                      {s.corpora && <span className={styles.sub}>in {s.corpora.name}</span>}
+                      <span className={styles.sub}>
+                        {[
+                          s.corpora && `in ${s.corpora.name}`,
+                          plural(s.reading_sessions?.length ?? 0, 'reading session'),
+                        ].filter(Boolean).join(' · ')}
+                      </span>
                     </div>
                     <span className={styles.arrow}>→</span>
                   </Link>
@@ -124,28 +125,6 @@ export default function ResourcePage() {
           )}
         </Section>
 
-        <Section
-          title="Reading sessions"
-          action={<Link to={`/session/new?resource=${id}`} className={styles.action}>+ New session</Link>}
-        >
-          {sessions.length === 0 ? <Empty>No reading sessions for this PDF.</Empty> : (
-            <ul className={styles.list}>
-              {sessions.map(s => (
-                <li key={s.id} className={styles.item}>
-                  <Link to={`/session/${s.id}`} className={styles.row}>
-                    <span className={styles.status}>{s.completed ? '✓' : '○'}</span>
-                    <div className={styles.rowMain}>
-                      <span className={styles.name}>{s.name}</span>
-                      <span className={styles.sub}>{s.studies ? `in ${s.studies.name}` : 'Standalone'}</span>
-                    </div>
-                    <span className={styles.meta}>pp. {s.start_page}–{s.end_page}</span>
-                    <span className={styles.arrow}>→</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
       </main>
 
       {corpusCandidates && (

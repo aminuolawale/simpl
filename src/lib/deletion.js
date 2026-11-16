@@ -1,6 +1,6 @@
 // Deletion helpers. What the database cascades (see 002_standalone_entities.sql):
 //   corpus   → only its links to resources; its studies become standalone
-//   resource → studies and sessions that read it; notes keep living without it
+//   resource → studies that read it, and their sessions; notes keep living without it
 //   study    → its sessions → their notes
 //   session  → its note
 // Storage objects are not cascaded, so PDFs are removed explicitly.
@@ -58,7 +58,7 @@ export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many
 export async function resourceDeleteMessage(supabase, resource) {
   const [{ count: studies }, { count: sessions }] = await Promise.all([
     supabase.from('studies').select('id', { count: 'exact', head: true }).eq('resource_id', resource.id),
-    supabase.from('reading_sessions').select('id', { count: 'exact', head: true }).eq('resource_id', resource.id),
+    supabase.from('reading_sessions').select('id, studies!inner(resource_id)', { count: 'exact', head: true }).eq('studies.resource_id', resource.id),
   ])
   const parts = []
   if (studies) parts.push(plural(studies, 'study', 'studies'))

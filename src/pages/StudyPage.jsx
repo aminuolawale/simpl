@@ -3,17 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { calcProgress } from '../lib/progress'
 import { currentUserId } from '../lib/resources'
-import { setSessionStudy } from '../lib/links'
 import { deleteStudy, deleteSession, deleteNote, plural } from '../lib/deletion'
 import { notePreview } from '../lib/notes'
 import { notifyDataChanged } from '../lib/events'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
-import ChooseModal from '../components/ChooseModal'
 import ProgressBar from '../components/ProgressBar'
 import SessionForm from '../components/SessionForm'
 import Section, { Empty } from '../components/Section'
-import ConfirmDelete, { RowAction, RowDeleteButton } from '../components/ConfirmDelete'
+import ConfirmDelete, { RowDeleteButton } from '../components/ConfirmDelete'
 import styles from '../styles/page.module.css'
 
 export default function StudyPage() {
@@ -26,7 +24,6 @@ export default function StudyPage() {
   const [error, setError] = useState(null)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(null) // { name, corpusId, corpora }
-  const [sessionCandidates, setSessionCandidates] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null) // { title, message, run }
 
   const load = async () => {
@@ -84,7 +81,6 @@ export default function StudyPage() {
       ...values,
       user_id,
       study_id: studyId,
-      resource_id: study.resource_id,
     })
     if (error) throw error
     setCreating(false)
@@ -108,17 +104,6 @@ export default function StudyPage() {
       notifyDataChanged()
     })
     setEditing(null)
-  }
-
-  const openAddSession = async () => {
-    const { data, error } = await supabase
-      .from('reading_sessions')
-      .select('id, name, start_page, end_page')
-      .is('study_id', null)
-      .eq('resource_id', study.resource_id)
-      .order('created_at', { ascending: false })
-    if (error) { setError(error.message); return }
-    setSessionCandidates(data ?? [])
   }
 
   if (loading) return <div className={styles.root}><AppBar /></div>
@@ -168,12 +153,7 @@ export default function StudyPage() {
 
         <Section
           title="Sessions"
-          action={
-            <>
-              <button className={styles.action} onClick={openAddSession}>Add existing</button>
-              <button className={styles.action} onClick={() => setCreating(true)}>+ New session</button>
-            </>
-          }
+          action={<button className={styles.action} onClick={() => setCreating(true)}>+ New session</button>}
         >
           {sessions.length === 0 ? <Empty>No sessions yet.</Empty> : (
             <ul className={styles.list}>
@@ -185,12 +165,6 @@ export default function StudyPage() {
                     <span className={styles.meta}>pp. {s.start_page}–{s.end_page}</span>
                     <span className={styles.arrow}>→</span>
                   </Link>
-                  <RowAction
-                    label={`Remove ${s.name} from this study`}
-                    onClick={() => run(() => setSessionStudy(supabase, s.id, null))}
-                  >
-                    Remove
-                  </RowAction>
                   <RowDeleteButton
                     label={`Delete ${s.name}`}
                     onClick={() => confirm(
@@ -268,20 +242,6 @@ export default function StudyPage() {
             <button className={styles.submit} type="submit" disabled={!editing.name.trim()}>Save</button>
           </form>
         </Modal>
-      )}
-
-      {sessionCandidates && (
-        <ChooseModal
-          title="Add an existing session"
-          emptyText={`No standalone sessions read “${study?.resources?.name}”.`}
-          items={sessionCandidates.map(s => ({ id: s.id, label: s.name, sub: `pp. ${s.start_page}–${s.end_page}` }))}
-          onChoose={async (item) => {
-            await setSessionStudy(supabase, item.id, studyId)
-            setSessionCandidates(null)
-            load()
-          }}
-          onClose={() => setSessionCandidates(null)}
-        />
       )}
 
       {pendingDelete && (

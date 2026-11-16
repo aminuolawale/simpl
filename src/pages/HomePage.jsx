@@ -15,8 +15,7 @@ const TABS = [
 
 const count = (rel) => rel?.[0]?.count ?? 0
 
-// Home: studies and corpora in two tabs. Everything else (standalone sessions,
-// notes, resources) is in the side nav.
+// Home: studies and corpora in two tabs. Notes and resources are in the side nav.
 export default function HomePage() {
   const [params, setParams] = useSearchParams()
   const tab = TABS.some(t => t.key === params.get('tab')) ? params.get('tab') : 'studies'

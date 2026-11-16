@@ -1,10 +1,10 @@
 -- Standalone entities
 --
--- Resources, studies, reading sessions and notes can now exist without a corpus.
+-- Resources, studies and notes can now exist without a corpus.
 --   * resources are owned by a user and linked to any number of corpora (corpus_resources)
 --   * a study belongs to at most one corpus (studies.corpus_id, nullable)
---   * a reading session reads a resource directly and optionally belongs to a study
---     using the same resource
+--   * reading sessions are unchanged in shape: they always belong to a study and
+--     read the study's resource. They gain user_id for simpler access rules.
 --   * a note optionally belongs to a session (still at most one note per session)
 --     and optionally references a resource
 --
@@ -57,9 +57,6 @@ alter table studies drop constraint studies_corpus_id_fkey;
 alter table studies add constraint studies_corpus_id_fkey
   foreign key (corpus_id) references corpora on delete set null;
 
--- Lets reading_sessions guarantee they read the same resource as their study.
-alter table studies add constraint studies_id_resource_id_key unique (id, resource_id);
-
 drop policy "Users own their studies" on studies;
 create policy "Users own their studies" on studies
   for all using (auth.uid() = user_id)
@@ -71,31 +68,16 @@ create policy "Users own their studies" on studies
 
 -- ─── reading_sessions ────────────────────────────────────────────────────────
 
-alter table reading_sessions
-  add column user_id uuid references auth.users,
-  add column resource_id uuid references resources on delete cascade;
-
-update reading_sessions rs
-  set user_id = s.user_id, resource_id = s.resource_id
-  from studies s where s.id = rs.study_id;
-
+alter table reading_sessions add column user_id uuid references auth.users;
+update reading_sessions rs set user_id = s.user_id from studies s where s.id = rs.study_id;
 alter table reading_sessions alter column user_id set not null;
-alter table reading_sessions alter column resource_id set not null;
-alter table reading_sessions alter column study_id drop not null;
-
--- Replace the plain study FK with one that also pins the resource. With a null
--- study_id (standalone session) the constraint is not checked.
-alter table reading_sessions drop constraint reading_sessions_study_id_fkey;
-alter table reading_sessions add constraint reading_sessions_study_resource_fkey
-  foreign key (study_id, resource_id) references studies (id, resource_id) on delete cascade;
 
 drop policy "Users access sessions in their studies" on reading_sessions;
 create policy "Users own their reading sessions" on reading_sessions
   for all using (auth.uid() = user_id)
   with check (
     auth.uid() = user_id
-    and exists (select 1 from resources r where r.id = resource_id and r.user_id = auth.uid())
-    and (study_id is null or exists (select 1 from studies s where s.id = study_id and s.user_id = auth.uid()))
+    and exists (select 1 from studies s where s.id = study_id and s.user_id = auth.uid())
   );
 
 -- ─── notes ───────────────────────────────────────────────────────────────────
@@ -107,10 +89,12 @@ alter table notes
   add column created_at timestamptz default now();
 
 update notes n
-  set user_id = rs.user_id,
-      resource_id = rs.resource_id,
+  set user_id = s.user_id,
+      resource_id = s.resource_id,
       created_at = coalesce(n.updated_at, now())
-  from reading_sessions rs where rs.id = n.reading_session_id;
+  from reading_sessions rs
+  join studies s on s.id = rs.study_id
+  where rs.id = n.reading_session_id;
 
 alter table notes alter column user_id set not null;
 -- The existing unique constraint on reading_session_id still allows any number

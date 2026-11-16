@@ -1,7 +1,6 @@
 // Linking and unlinking entities. See supabase/migrations/002_standalone_entities.sql:
 //   resource ⇄ corpus   many-to-many (corpus_resources)
 //   study → corpus      at most one (studies.corpus_id)
-//   session → study     at most one, same resource as the study
 //   note → session      at most one note per session
 //   note → resource     optional reference
 
@@ -49,9 +48,6 @@ export async function unlinkResource(supabase, corpusId, resourceId) {
 
 export const setStudyCorpus = (supabase, studyId, corpusId) =>
   update(supabase, 'studies', studyId, { corpus_id: corpusId ?? null })
-
-export const setSessionStudy = (supabase, sessionId, studyId) =>
-  update(supabase, 'reading_sessions', sessionId, { study_id: studyId ?? null })
 
 export async function attachNote(supabase, noteId, sessionId) {
   try {

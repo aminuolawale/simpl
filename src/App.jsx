@@ -9,7 +9,6 @@ import CorpusPage from './pages/CorpusPage'
 import ResourcePage from './pages/ResourcePage'
 import StudyNewPage from './pages/StudyNewPage'
 import StudyPage from './pages/StudyPage'
-import SessionNewPage from './pages/SessionNewPage'
 import SessionPage from './pages/SessionPage'
 import NotePage from './pages/NotePage'
 import UploadPage from './pages/UploadPage'
@@ -43,7 +42,6 @@ export default function App() {
             <Route path="/resource/:id" element={<ResourcePage />} />
             <Route path="/study/new" element={<StudyNewPage />} />
             <Route path="/study/:studyId" element={<StudyPage />} />
-            <Route path="/session/new" element={<SessionNewPage />} />
           </Route>
           {/* Reader pages: full width, no side nav */}
           <Route path="/session/:sessionId" element={protect(<SessionPage />)} />

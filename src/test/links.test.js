@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   linkResource, linkResources, unlinkResource,
-  setStudyCorpus, setSessionStudy, attachNote, setNoteResource,
+  setStudyCorpus, attachNote, setNoteResource,
 } from '../lib/links'
 
 // Minimal fake of the supabase-js query builder used by links.js.
@@ -69,13 +69,6 @@ describe('single-parent links', () => {
       ['update', 'studies', { corpus_id: 'c1' }, 'id', 's1'],
       ['update', 'studies', { corpus_id: null }, 'id', 's1'],
     ])
-  })
-
-  it('attaches and detaches a session from a study', async () => {
-    const sb = fakeSupabase()
-    await setSessionStudy(sb, 'rs1', 'st1')
-    await setSessionStudy(sb, 'rs1', undefined)
-    expect(sb.calls.map(c => c[2])).toEqual([{ study_id: 'st1' }, { study_id: null }])
   })
 
   it('sets and clears a note resource', async () => {
