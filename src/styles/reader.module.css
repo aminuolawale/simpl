@@ -45,3 +45,11 @@
   opacity: 0.4;
   cursor: default;
 }
+
+.message {
+  margin: auto;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--muted);
+}

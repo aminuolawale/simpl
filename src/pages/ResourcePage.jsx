@@ -27,7 +27,7 @@ export default function ResourcePage() {
       { data: linkData },
       { data: studyData },
     ] = await Promise.all([
-      supabase.from('resources').select('id, name, size_bytes, created_at').eq('id', id).single(),
+      supabase.from('resources').select('id, name, size_bytes, created_at, last_page').eq('id', id).single(),
       supabase.from('corpus_resources').select('corpora(id, name)').eq('resource_id', id),
       supabase.from('studies')
         .select('id, name, corpora(name), reading_sessions(id, completed)')
@@ -69,7 +69,14 @@ export default function ResourcePage() {
     <div className={styles.root}>
       <AppBar
         crumbs={[{ label: resource?.name }]}
-        actions={<button className={styles.action} onClick={askDelete}>Delete PDF</button>}
+        actions={
+          <>
+            <Link to={`/resource/${id}/read`} className={styles.action}>
+              {resource?.last_page > 1 ? `Continue from p. ${resource.last_page}` : 'Open PDF'}
+            </Link>
+            <button className={styles.action} onClick={askDelete}>Delete PDF</button>
+          </>
+        }
       />
       <main className={styles.main}>
         <div className={styles.header}>

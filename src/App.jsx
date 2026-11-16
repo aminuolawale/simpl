@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage'
 import CorpusNewPage from './pages/CorpusNewPage'
 import CorpusPage from './pages/CorpusPage'
 import ResourcePage from './pages/ResourcePage'
+import ResourceReaderPage from './pages/ResourceReaderPage'
 import StudyNewPage from './pages/StudyNewPage'
 import StudyPage from './pages/StudyPage'
 import SessionPage from './pages/SessionPage'
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/study/:studyId" element={<StudyPage />} />
           </Route>
           {/* Reader pages: full width, no side nav */}
+          <Route path="/resource/:id/read" element={protect(<ResourceReaderPage />)} />
           <Route path="/session/:sessionId" element={protect(<SessionPage />)} />
           <Route path="/note/:noteId" element={protect(<NotePage />)} />
           <Route path="/corpus/:id/study/:studyId" element={<LegacyStudyRedirect />} />
