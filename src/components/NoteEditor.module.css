@@ -130,3 +130,29 @@
   float: left;
   height: 0;
 }
+
+/* Inline equations (click to edit) */
+.editor :global(.tiptap-mathematics-render) {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.editor :global(.tiptap-mathematics-render--editable) {
+  cursor: pointer;
+}
+
+.editor :global(.tiptap-mathematics-render--editable:hover),
+.editor :global(.ProseMirror-selectednode.tiptap-mathematics-render) {
+  background: var(--surface);
+}
+
+.editor :global(.inline-math-error) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  color: #a1442f;
+}
+
+/* The "@query" being typed while the @ menu is open */
+.editor :global(.suggestion) {
+  color: var(--muted);
+}

@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import { InlineMath } from '@tiptap/extension-mathematics'
+import 'katex/dist/katex.min.css'
+import { AtMenu } from './editor/atMenu'
+import AtMenuList from './editor/AtMenuList'
+import EquationPopup from './editor/EquationPopup'
 import { supabase } from '../lib/supabase'
 import { deleteNote } from '../lib/deletion'
 import { currentUserId } from '../lib/resources'
@@ -36,6 +41,15 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
   latest.current = { newNote, onCreated }
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
+  // @ menu: { items, rect, command } while open; `menuIndex` is the highlighted item.
+  const [menu, setMenu] = useState(null)
+  const [menuIndex, setMenuIndex] = useState(0)
+  const menuRef = useRef({ menu: null, index: 0 })
+  menuRef.current = { menu, index: menuIndex }
+  // Equation popup: { pos, initial, editing, rect } while open.
+  const [equation, setEquation] = useState(null)
+  const editorRef = useRef(null)
+
   const setStatus = (text) => { if (statusRef.current) statusRef.current.textContent = text }
 
   const save = (content) => {
@@ -63,7 +77,41 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
   }
 
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } })],
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      InlineMath.configure({
+        katexOptions: { throwOnError: false },
+        // Click an equation to edit it.
+        onClick: (node, pos) => {
+          const dom = editorRef.current?.view.nodeDOM(pos)
+          if (!dom) return
+          setEquation({ pos, initial: node.attrs.latex, editing: true, rect: dom.getBoundingClientRect() })
+        },
+      }),
+      AtMenu.configure({
+        onChange: (props) => {
+          if (!props) { setMenu(null); return }
+          setMenu({ items: props.items, rect: props.clientRect?.(), command: props.command })
+          if (props.items !== menuRef.current.menu?.items) setMenuIndex(0)
+        },
+        onKeyDown: (event) => {
+          const { menu, index } = menuRef.current
+          if (!menu || menu.items.length === 0) return false
+          const n = menu.items.length
+          if (event.key === 'ArrowDown') { setMenuIndex((index + 1) % n); return true }
+          if (event.key === 'ArrowUp') { setMenuIndex((index - 1 + n) % n); return true }
+          if (event.key === 'Enter' || event.key === 'Tab') { menu.command(menu.items[index]); return true }
+          if (event.key === 'Escape') { setMenu(null); return true }
+          return false
+        },
+        onSelect: (item, pos) => {
+          if (item.id === 'equation') {
+            const rect = editorRef.current?.view.coordsAtPos(pos)
+            setEquation({ pos, initial: '', editing: false, rect })
+          }
+        },
+      }),
+    ],
     content: initialContent ?? '',
     onUpdate: ({ editor }) => {
       clearTimeout(saveTimer.current)
@@ -74,6 +122,30 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
       }, SAVE_DELAY)
     },
   })
+
+  editorRef.current = editor
+
+  const closeEquation = () => {
+    const pos = equation?.pos
+    setEquation(null)
+    if (editor && pos != null) editor.chain().focus().setTextSelection(pos + (equation.editing ? 1 : 0)).run()
+  }
+
+  const submitEquation = (latex) => {
+    const { pos, editing } = equation
+    setEquation(null)
+    if (!editor) return
+    const chain = editor.chain().focus()
+    if (editing && !latex) {
+      chain.deleteInlineMath({ pos }).setTextSelection(pos).run()
+    } else if (editing) {
+      chain.updateInlineMath({ latex, pos }).setTextSelection(pos + 1).run()
+    } else if (latex) {
+      chain.insertInlineMath({ latex, pos }).setTextSelection(pos + 1).run()
+    } else {
+      chain.setTextSelection(pos).run()
+    }
+  }
 
   // Re-read which formats are active whenever the selection or content changes.
   const active = useEditorState({
@@ -125,6 +197,25 @@ export default function NoteEditor({ noteId = null, initialContent, newNote = {}
         )}
       </div>
       <EditorContent editor={editor} className={styles.editor} />
+      {menu && (
+        <AtMenuList
+          items={menu.items}
+          index={menuIndex}
+          rect={menu.rect}
+          onHover={setMenuIndex}
+          onChoose={item => menu.command(item)}
+        />
+      )}
+      {equation?.rect && (
+        <EquationPopup
+          key={`${equation.pos}-${equation.editing}`}
+          initial={equation.initial}
+          editing={equation.editing}
+          rect={equation.rect}
+          onSubmit={submitEquation}
+          onCancel={closeEquation}
+        />
+      )}
       {confirmingDelete && (
         <ConfirmDelete
           title="Delete note"
