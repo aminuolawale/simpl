@@ -1,0 +1,86 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.message {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.warning,
+.error {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--muted);
+}
+
+.buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cancel,
+.confirm {
+  flex: 1;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 400;
+  padding: 10px 0;
+  text-align: center;
+  transition: opacity 0.15s;
+}
+
+.cancel {
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.confirm {
+  color: var(--bg);
+  background: var(--text);
+}
+
+.cancel:disabled,
+.confirm:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cancel:not(:disabled):hover,
+.confirm:not(:disabled):hover {
+  opacity: 0.8;
+}
+
+.rowBtn {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  padding: 4px 0 4px 16px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+:global(li):hover > .rowBtn,
+.rowBtn:focus-visible {
+  opacity: 1;
+}
+
+.rowBtn:hover {
+  color: var(--text);
+}
+
+@media (hover: none) {
+  .rowBtn {
+    opacity: 1;
+  }
+}

@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { calcProgress } from '../lib/progress'
 import { flattenOutline, sectionsAfter, isValidRange, sectionPage } from '../lib/sections'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
 import ProgressBar from '../components/ProgressBar'
+import ConfirmDelete, { RowDeleteButton } from '../components/ConfirmDelete'
+import { deleteStudy, deleteSession, deleteNote, plural } from '../lib/deletion'
 import styles from './StudyPage.module.css'
 
 export default function StudyPage() {
   const { id: corpusId, studyId } = useParams()
+  const navigate = useNavigate()
   const [study, setStudy] = useState(null)
   const [corpus, setCorpus] = useState(null)
   const [sessions, setSessions] = useState([])
@@ -20,6 +23,7 @@ export default function StudyPage() {
   const [form, setForm] = useState({ name: '', startSection: '', endSection: '', startPage: '', endPage: '' })
   const [usePageNumbers, setUsePageNumbers] = useState(false)
   const [error, setError] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null) // { title, message, run }
 
   const load = async () => {
     const [
@@ -45,6 +49,8 @@ export default function StudyPage() {
         .select('content, reading_session_id, updated_at')
         .in('reading_session_id', sessionIds)
       setNotes(noteData ?? [])
+    } else {
+      setNotes([])
     }
 
     setLoading(false)
@@ -93,6 +99,48 @@ export default function StudyPage() {
     load()
   }
 
+  const afterDelete = async () => {
+    setPendingDelete(null)
+    await load()
+  }
+
+  const confirmDeleteStudy = () => {
+    setPendingDelete({
+      title: 'Delete study',
+      message: sessions.length
+        ? `“${study?.name}” will be deleted, along with ${plural(sessions.length, 'reading session')} and their notes. The PDF is kept.`
+        : `“${study?.name}” will be deleted. The PDF is kept.`,
+      run: async () => {
+        await deleteStudy(supabase, studyId)
+        navigate(`/corpus/${corpusId}`)
+      },
+    })
+  }
+
+  const confirmDeleteSession = (s) => {
+    setPendingDelete({
+      title: 'Delete reading session',
+      message: noteFor(s.id)
+        ? `“${s.name}” and its note will be deleted.`
+        : `“${s.name}” will be deleted.`,
+      run: async () => {
+        await deleteSession(supabase, s.id)
+        await afterDelete()
+      },
+    })
+  }
+
+  const confirmDeleteNote = (s) => {
+    setPendingDelete({
+      title: 'Delete note',
+      message: `The note for “${s.name}” will be deleted. The session is kept.`,
+      run: async () => {
+        await deleteNote(supabase, s.id)
+        await afterDelete()
+      },
+    })
+  }
+
   const noteFor = (sessionId) => notes.find(n => n.reading_session_id === sessionId)
 
   const previewText = (content) => {
@@ -120,6 +168,11 @@ export default function StudyPage() {
           { label: corpus?.name, to: `/corpus/${corpusId}` },
           { label: study?.name },
         ]}
+        actions={
+          <button className={styles.action} onClick={confirmDeleteStudy}>
+            Delete study
+          </button>
+        }
       />
       <main className={styles.main}>
         <div className={styles.studyHeader}>
@@ -140,13 +193,14 @@ export default function StudyPage() {
           ) : (
             <ul className={styles.list}>
               {sessions.map(s => (
-                <li key={s.id}>
+                <li key={s.id} className={styles.item}>
                   <Link to={`/corpus/${corpusId}/study/${studyId}/session/${s.id}`} className={styles.sessionRow}>
                     <span className={styles.status}>{s.completed ? '✓' : '○'}</span>
                     <span className={styles.sessionName}>{s.name}</span>
                     <span className={styles.pages}>pp. {s.start_page}–{s.end_page}</span>
                     <span className={styles.arrow}>→</span>
                   </Link>
+                  <RowDeleteButton label={`Delete ${s.name}`} onClick={() => confirmDeleteSession(s)} />
                 </li>
               ))}
             </ul>
@@ -164,11 +218,12 @@ export default function StudyPage() {
                 const preview = previewText(note.content)
                 if (!preview) return null
                 return (
-                  <li key={s.id}>
+                  <li key={s.id} className={styles.item}>
                     <Link to={`/corpus/${corpusId}/study/${studyId}/session/${s.id}`} className={styles.noteRow}>
                       <span className={styles.noteSession}>{s.name}</span>
                       <p className={styles.notePreview}>{preview}</p>
                     </Link>
+                    <RowDeleteButton label={`Delete note for ${s.name}`} onClick={() => confirmDeleteNote(s)} />
                   </li>
                 )
               })}
@@ -176,6 +231,15 @@ export default function StudyPage() {
           </section>
         )}
       </main>
+
+      {pendingDelete && (
+        <ConfirmDelete
+          title={pendingDelete.title}
+          message={pendingDelete.message}
+          onConfirm={pendingDelete.run}
+          onClose={() => setPendingDelete(null)}
+        />
+      )}
 
       {creating && (
         <Modal

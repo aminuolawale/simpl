@@ -40,6 +40,20 @@
   letter-spacing: 0.03em;
 }
 
+.deleteBtn {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 300;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  margin-left: 16px;
+  transition: color 0.15s;
+}
+
+.deleteBtn:hover {
+  color: var(--text);
+}
+
 .editor {
   flex: 1;
   overflow-y: auto;

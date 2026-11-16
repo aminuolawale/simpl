@@ -8,6 +8,8 @@ import TocDrawer from '../components/TocDrawer'
 import PageCanvas from '../components/PageCanvas'
 import SessionDock from '../components/SessionDock'
 import NoteEditor from '../components/NoteEditor'
+import ConfirmDelete from '../components/ConfirmDelete'
+import { deleteSession } from '../lib/deletion'
 import styles from './SessionPage.module.css'
 
 export default function SessionPage() {
@@ -21,6 +23,7 @@ export default function SessionPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -74,11 +77,16 @@ export default function SessionPage() {
           { label: session?.name },
         ]}
         actions={
-          !session?.completed && (
-            <button className={styles.complete} onClick={markComplete} disabled={completing}>
-              {completing ? 'Saving…' : 'Mark complete'}
+          <>
+            {!session?.completed && (
+              <button className={styles.complete} onClick={markComplete} disabled={completing}>
+                {completing ? 'Saving…' : 'Mark complete'}
+              </button>
+            )}
+            <button className={styles.complete} onClick={() => setConfirmingDelete(true)}>
+              Delete session
             </button>
-          )
+          </>
         }
       />
       <div className={styles.body}>
@@ -96,6 +104,17 @@ export default function SessionPage() {
         startPage={session?.start_page}
         endPage={session?.end_page}
       />
+      {confirmingDelete && (
+        <ConfirmDelete
+          title="Delete reading session"
+          message={`“${session?.name}” and its note will be deleted.`}
+          onClose={() => setConfirmingDelete(false)}
+          onConfirm={async () => {
+            await deleteSession(supabase, sessionId)
+            navigate(`/corpus/${corpusId}/study/${studyId}`)
+          }}
+        />
+      )}
     </div>
   )
 }

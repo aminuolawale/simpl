@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { uploadResource } from '../lib/storage'
 import { extractOutline } from '../lib/pdf'
 import AppBar from '../components/AppBar'
 import Modal from '../components/Modal'
 import ProgressBar from '../components/ProgressBar'
+import ConfirmDelete, { RowDeleteButton } from '../components/ConfirmDelete'
+import { deleteCorpus, deleteResource, deleteStudy, plural } from '../lib/deletion'
 import styles from './CorpusPage.module.css'
 
 export default function CorpusPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [corpus, setCorpus] = useState(null)
   const [resources, setResources] = useState([])
   const [studies, setStudies] = useState([])
@@ -19,6 +22,7 @@ export default function CorpusPage() {
   const [studyName, setStudyName] = useState('')
   const [studyResourceId, setStudyResourceId] = useState('')
   const [error, setError] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null) // { title, message, run }
   const fileRef = useRef(null)
 
   const load = async () => {
@@ -83,6 +87,52 @@ export default function CorpusPage() {
     load()
   }
 
+  const confirmDeleteCorpus = () => {
+    const parts = []
+    if (resources.length) parts.push(plural(resources.length, 'PDF'))
+    if (studies.length) parts.push(`${plural(studies.length, 'study', 'studies')} with their sessions and notes`)
+    setPendingDelete({
+      title: 'Delete corpus',
+      message: parts.length
+        ? `“${corpus?.name}” and everything in it will be deleted: ${parts.join(' and ')}.`
+        : `“${corpus?.name}” will be deleted.`,
+      run: async () => {
+        await deleteCorpus(supabase, id)
+        navigate('/')
+      },
+    })
+  }
+
+  const confirmDeleteResource = (r) => {
+    const dependent = studies.filter(s => s.resource_id === r.id).length
+    setPendingDelete({
+      title: 'Delete PDF',
+      message: dependent
+        ? `“${r.name}” will be deleted, along with ${plural(dependent, 'study', 'studies')} that use it and their sessions and notes.`
+        : `“${r.name}” will be deleted.`,
+      run: async () => {
+        await deleteResource(supabase, r.id)
+        setPendingDelete(null)
+        load()
+      },
+    })
+  }
+
+  const confirmDeleteStudy = (s) => {
+    const sessions = s.reading_sessions?.length ?? 0
+    setPendingDelete({
+      title: 'Delete study',
+      message: sessions
+        ? `“${s.name}” will be deleted, along with ${plural(sessions, 'reading session')} and their notes. The PDF is kept.`
+        : `“${s.name}” will be deleted. The PDF is kept.`,
+      run: async () => {
+        await deleteStudy(supabase, s.id)
+        setPendingDelete(null)
+        load()
+      },
+    })
+  }
+
   const fmtSize = (bytes) => {
     if (!bytes) return ''
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -96,7 +146,14 @@ export default function CorpusPage() {
 
   return (
     <div className={styles.root}>
-      <AppBar crumbs={[{ label: corpus?.name }]} />
+      <AppBar
+        crumbs={[{ label: corpus?.name }]}
+        actions={
+          <button className={styles.action} onClick={confirmDeleteCorpus}>
+            Delete corpus
+          </button>
+        }
+      />
       <main className={styles.main}>
         {error && <p className={styles.error}>{error}</p>}
 
@@ -127,6 +184,7 @@ export default function CorpusPage() {
                   <span className={styles.resourceName}>{r.name}</span>
                   <span className={styles.meta}>{fmtSize(r.size_bytes)}</span>
                   <span className={styles.meta}>{fmtDate(r.created_at)}</span>
+                  <RowDeleteButton label={`Delete ${r.name}`} onClick={() => confirmDeleteResource(r)} />
                 </li>
               ))}
             </ul>
@@ -150,7 +208,7 @@ export default function CorpusPage() {
                 const sessions = s.reading_sessions ?? []
                 const completed = sessions.filter(r => r.completed).length
                 return (
-                  <li key={s.id}>
+                  <li key={s.id} className={styles.item}>
                     <Link to={`/corpus/${id}/study/${s.id}`} className={styles.studyRow}>
                       <div className={styles.studyInfo}>
                         <span className={styles.studyName}>{s.name}</span>
@@ -161,6 +219,7 @@ export default function CorpusPage() {
                       )}
                       <span className={styles.arrow}>→</span>
                     </Link>
+                    <RowDeleteButton label={`Delete ${s.name}`} onClick={() => confirmDeleteStudy(s)} />
                   </li>
                 )
               })}
@@ -168,6 +227,15 @@ export default function CorpusPage() {
           )}
         </section>
       </main>
+
+      {pendingDelete && (
+        <ConfirmDelete
+          title={pendingDelete.title}
+          message={pendingDelete.message}
+          onConfirm={pendingDelete.run}
+          onClose={() => setPendingDelete(null)}
+        />
+      )}
 
       {creatingStudy && (
         <Modal title="New study" onClose={() => { setCreatingStudy(false); setStudyName(''); setStudyResourceId(''); setError(null) }}>
