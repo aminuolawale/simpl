@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import katex from 'katex'
 import styles from './EditorPopups.module.css'
 
@@ -10,13 +10,24 @@ export function renderLatex(latex) {
   }
 }
 
-// A small popup for typing LaTeX with a live preview.
-// Enter submits (when the LaTeX is valid), Escape or clicking outside cancels.
+// A popup for typing LaTeX, with a live preview above the input.
+// Enter submits (when the LaTeX is valid), Shift+Enter adds a line,
+// Escape or clicking outside cancels.
+const WIDTH = 480
+const GAP = 6
+const MARGIN = 8
 export default function EquationPopup({ initial = '', rect, editing = false, onSubmit, onCancel }) {
   const [latex, setLatex] = useState(initial)
   const inputRef = useRef(null)
   const rootRef = useRef(null)
   const preview = useMemo(() => (latex.trim() ? renderLatex(latex) : null), [latex])
+  // Open below the equation; flip above it if there isn't room below.
+  const [above, setAbove] = useState(false)
+  useLayoutEffect(() => {
+    const height = rootRef.current?.offsetHeight ?? 0
+    const roomBelow = window.innerHeight - rect.bottom - GAP - MARGIN
+    setAbove(height > roomBelow && rect.top - GAP - MARGIN > roomBelow)
+  }, [rect, preview])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -31,35 +42,27 @@ export default function EquationPopup({ initial = '', rect, editing = false, onS
 
   const onKeyDown = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); onCancel() }
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (!preview?.error) onSubmit(latex.trim())
     }
   }
 
   // Keep the popup inside the viewport.
-  const width = 340
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+  const width = Math.min(WIDTH, window.innerWidth - 2 * MARGIN)
+  const left = Math.max(MARGIN, Math.min(rect.left, window.innerWidth - width - MARGIN))
+  const vertical = above
+    ? { bottom: window.innerHeight - rect.top + GAP }
+    : { top: rect.bottom + GAP }
 
   return (
     <div
       ref={rootRef}
       className={styles.equation}
-      style={{ top: rect.bottom + 6, left, width }}
+      style={{ ...vertical, left, width }}
       role="dialog"
       aria-label={editing ? 'Edit equation' : 'Insert equation'}
     >
-      <input
-        ref={inputRef}
-        className={styles.equationInput}
-        value={latex}
-        onChange={e => setLatex(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder="e.g. E = mc^2"
-        aria-label="LaTeX"
-        spellCheck={false}
-        autoComplete="off"
-      />
       <div className={styles.preview} aria-live="polite">
         {!preview ? (
           <span className={styles.previewEmpty}>Preview</span>
@@ -69,10 +72,22 @@ export default function EquationPopup({ initial = '', rect, editing = false, onS
           <span dangerouslySetInnerHTML={{ __html: preview.html }} />
         )}
       </div>
+      <textarea
+        ref={inputRef}
+        className={styles.equationInput}
+        value={latex}
+        onChange={e => setLatex(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={'e.g. E = mc^2\n\nShift+Enter for a new line'}
+        aria-label="LaTeX"
+        rows={6}
+        spellCheck={false}
+        autoComplete="off"
+      />
       <div className={styles.equationHint}>
         {preview?.error ? 'Fix the equation to insert it' :
           editing && !latex.trim() ? 'Enter to remove · Esc to cancel' :
-          `Enter to ${editing ? 'update' : 'insert'} · Esc to cancel`}
+          `Enter to ${editing ? 'update' : 'insert'} · Shift+Enter for a new line · Esc to cancel`}
       </div>
     </div>
   )

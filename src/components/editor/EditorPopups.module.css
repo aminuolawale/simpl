@@ -50,8 +50,12 @@
 
 .equationInput {
   width: 100%;
+  min-height: 120px;
+  max-height: 40vh;
+  resize: vertical;
+  line-height: 1.5;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -65,14 +69,19 @@
 }
 
 .preview {
-  min-height: 36px;
+  min-height: 56px;
+  max-height: 30vh;
+  overflow: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 6px;
-  overflow-x: auto;
   font-size: 15px;
   color: var(--text);
+}
+
+/* margin: auto centres the preview but, unlike justify-content, lets a wide
+   equation scroll from its left edge instead of being cut off */
+.preview > * {
+  margin: auto;
 }
 
 .previewEmpty {
