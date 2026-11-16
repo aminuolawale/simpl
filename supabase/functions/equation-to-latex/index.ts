@@ -1,15 +1,16 @@
 // POST { image: base64 PNG, hint?: string } → { latex, display, legible }
 //
-// Signed-in users only. Needs the ANTHROPIC_API_KEY secret:
-//   supabase secrets set ANTHROPIC_API_KEY=...
+// Signed-in users only. Needs the GEMINI_API_KEY secret:
+//   supabase secrets set GEMINI_API_KEY=...
 //   supabase functions deploy equation-to-latex
-import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
+import { GoogleGenAI } from "npm:@google/genai@3.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.119.0";
 import { ConversionError, convertEquation } from "./convert.ts";
 
 const MAX_IMAGE_BASE64 = 5_000_000; // ~3.7 MB PNG; clips are far smaller
 
-const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY") });
+// Image input items are only in v1beta of the Interactions API (v1 rejects them).
+const ai = new GoogleGenAI({ apiKey: Deno.env.get("GEMINI_API_KEY"), apiVersion: "v1beta" });
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -44,16 +45,18 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const result = await convertEquation(anthropic, {
+    const result = await convertEquation(ai, {
       image,
       hint: typeof hint === "string" ? hint : undefined,
     });
     return json(result);
   } catch (e) {
     if (e instanceof ConversionError) return json({ error: e.message }, e.status);
-    if (e instanceof Anthropic.RateLimitError) return json({ error: "Too many requests. Try again shortly." }, 429);
-    if (e instanceof Anthropic.APIError) {
-      console.error("Anthropic API error", e.status, e.message);
+    // Errors from the Gemini API carry the HTTP status.
+    const status = (e as { status?: unknown })?.status;
+    if (typeof status === "number") {
+      console.error("Gemini API error", status, (e as Error).message);
+      if (status === 429) return json({ error: "Too many requests. Try again shortly." }, 429);
       return json({ error: "The equation service is unavailable." }, 502);
     }
     console.error(e);

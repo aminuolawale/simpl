@@ -1,8 +1,8 @@
-// Turns an image of an equation (clipped from a PDF) into LaTeX with Claude.
+// Turns an image of an equation (clipped from a PDF) into LaTeX with Gemini.
 // Kept free of Deno APIs so it can be type-checked and tested on its own.
-import type Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
+import type { GoogleGenAI } from "npm:@google/genai@3.3.0";
 
-export const MODEL = "claude-opus-5-5";
+export const MODEL = "gemini-4-hydrogen";
 
 export interface EquationResult {
   /** LaTeX for KaTeX, without surrounding $ or \[ \] delimiters. */
@@ -22,9 +22,9 @@ export class ConversionError extends Error {
 const SCHEMA = {
   type: "object",
   properties: {
-    latex: { type: "string" },
-    display: { type: "boolean" },
-    legible: { type: "boolean" },
+    latex: { type: "string", description: "The expression in LaTeX, without math delimiters." },
+    display: { type: "boolean", description: "True for a standalone displayed equation." },
+    legible: { type: "boolean", description: "False if the image is unclear, cut off, or not math." },
   },
   required: ["latex", "display", "legible"],
   additionalProperties: false,
@@ -40,47 +40,42 @@ const SYSTEM = `You transcribe images of mathematical notation, clipped from PDF
 - Set legible to false if the image is cut off, too blurry to read with confidence, or not mathematical notation; still give your best transcription.`;
 
 export async function convertEquation(
-  client: Anthropic,
+  ai: GoogleGenAI,
   { image, hint }: { image: string; hint?: string },
 ): Promise<EquationResult> {
   const text = hint?.trim()
     ? `Transcribe this equation. Text extracted from the PDF at the same spot, which may be garbled or incomplete, use only as a hint: ${hint.trim().slice(0, 2000)}`
     : "Transcribe this equation.";
 
-  const response = await client.beta.messages.create({
+  const interaction = await ai.interactions.create({
     model: MODEL,
-    max_tokens: 8000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    system: SYSTEM,
-    output_config: {
-      effort: "low",
-      format: { type: "json_schema", schema: SCHEMA },
-    },
-    messages: [{
-      role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: "image/png", data: image } },
-        { type: "text", text },
-      ],
-    }],
+    system_instruction: SYSTEM,
+    input: [
+      { type: "text", text },
+      { type: "image", data: image, mime_type: "image/png" },
+    ],
+    response_format: { type: "text", mime_type: "application/json", schema: SCHEMA },
+    generation_config: { thinking_level: "low", max_output_tokens: 8000 },
+    store: false, // nothing to continue later; don't keep the clip server-side
   });
 
-  if (response.stop_reason === "refusal") {
-    throw new ConversionError("The equation couldn't be transcribed.", 422);
+  if (interaction.status !== "completed") {
+    console.error("Gemini interaction not completed:", interaction.status);
+    throw new ConversionError(
+      interaction.status === "incomplete"
+        ? "The equation was too long to transcribe."
+        : "The equation couldn't be transcribed.",
+      422,
+    );
   }
-  if (response.stop_reason === "max_tokens") {
-    throw new ConversionError("The equation was too long to transcribe.", 422);
-  }
-  const block = response.content.find((b) => b.type === "text");
-  if (!block || block.type !== "text") {
-    throw new ConversionError("No transcription was returned.", 502);
-  }
+  const raw = interaction.output_text;
+  if (!raw) throw new ConversionError("No transcription was returned.", 502);
   let result: EquationResult;
   try {
-    result = JSON.parse(block.text) as EquationResult;
+    result = JSON.parse(raw) as EquationResult;
   } catch {
     throw new ConversionError("The transcription couldn't be read.", 502);
   }
-  return { latex: result.latex.trim(), display: result.display, legible: result.legible };
+  if (typeof result.latex !== "string") throw new ConversionError("The transcription couldn't be read.", 502);
+  return { latex: result.latex.trim(), display: !!result.display, legible: !!result.legible };
 }

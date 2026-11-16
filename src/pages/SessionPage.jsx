@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getSignedUrl } from '../lib/storage'
 import { deleteSession } from '../lib/deletion'
 import { usePdf } from '../context/PdfContext'
 import AppBar from '../components/AppBar'
@@ -16,7 +15,7 @@ import styles from '../styles/reader.module.css'
 export default function SessionPage() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const { loadPdfFromUrl } = usePdf()
+  const { openResourcePdf } = usePdf()
   const [session, setSession] = useState(null)
   const [note, setNote] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -46,7 +45,12 @@ export default function SessionPage() {
 
       const resource = sessionData?.studies?.resources
       if (resource?.storage_path) {
-        loadPdfFromUrl(() => getSignedUrl(supabase, resource.storage_path), sessionData.start_page, resource.outline, sessionData.studies.resource_id)
+        openResourcePdf({
+          id: sessionData.studies.resource_id,
+          path: resource.storage_path,
+          startPage: sessionData.start_page,
+          outline: resource.outline,
+        })
       }
     }
     init()

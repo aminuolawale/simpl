@@ -1,4 +1,4 @@
-import pdfjsLib from './pdfjs'
+import pdfjsLib, { getPdfWorker } from './pdfjs'
 
 // The document outline as [{ title, pageNumber, items }], with destinations
 // resolved to 1-based page numbers (null when one can't be resolved).
@@ -17,10 +17,10 @@ export async function readOutline(pdf) {
 }
 
 export async function extractOutline(file) {
-  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), worker: getPdfWorker() }).promise
   try {
     return await readOutline(pdf)
   } finally {
-    pdf.destroy() // frees its worker
+    pdf.destroy()
   }
 }

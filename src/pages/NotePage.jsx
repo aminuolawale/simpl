@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getSignedUrl } from '../lib/storage'
 import { attachNote, setNoteResource } from '../lib/links'
 import { deleteNote } from '../lib/deletion'
 import { noteTitle } from '../lib/notes'
@@ -27,7 +26,7 @@ const TITLE_SAVE_DELAY = 600
 export default function NotePage() {
   const { noteId } = useParams()
   const navigate = useNavigate()
-  const { loadPdfFromUrl } = usePdf()
+  const { openResourcePdf } = usePdf()
   const [note, setNote] = useState(null)
   const [noteWidth, setNoteWidth] = useNotePaneWidth()
   const [title, setTitle] = useState('')
@@ -59,7 +58,7 @@ export default function NotePage() {
   const storagePath = note?.resources?.storage_path
   useEffect(() => {
     if (!storagePath) return
-    loadPdfFromUrl(() => getSignedUrl(supabase, storagePath), 1, note.resources.outline, note.resources.id)
+    openResourcePdf({ id: note.resources.id, path: storagePath, outline: note.resources.outline })
   }, [storagePath])
 
   const saveTitle = async (value) => {

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { getSignedUrl } from '../lib/storage'
 import { usePdf, useCurrentPage } from '../context/PdfContext'
 import AppBar from '../components/AppBar'
 import TocDrawer from '../components/TocDrawer'
@@ -11,7 +10,7 @@ import styles from '../styles/reader.module.css'
 
 export default function ResourceReaderPage() {
   const { id } = useParams()
-  const { loadPdfFromUrl, pageCount, status } = usePdf()
+  const { openResourcePdf, pageCount, status } = usePdf()
   const currentPage = useCurrentPage()
   const [resource, setResource] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -36,11 +35,11 @@ export default function ResourceReaderPage() {
       setResource(data)
       savedPage.current = data.last_page ?? 1
       setStarted(true)
-      loadPdfFromUrl(() => getSignedUrl(supabase, data.storage_path), savedPage.current, data.outline, data.id)
+      openResourcePdf({ id: data.id, path: data.storage_path, startPage: savedPage.current, outline: data.outline })
     }
     init()
     return () => { cancelled = true }
-  }, [id, loadPdfFromUrl])
+  }, [id, openResourcePdf])
 
   // Save the current page shortly after the reader settles on it, so the
   // jumps while the PDF first lays out and scrolls aren't recorded.

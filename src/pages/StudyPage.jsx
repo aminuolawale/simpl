@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { calcProgress } from '../lib/progress'
 import { currentUserId } from '../lib/resources'
+import { prefetchResourcePdf } from '../lib/pdfSource'
 import { deleteStudy, deleteSession, deleteNote, plural } from '../lib/deletion'
 import { notePreview } from '../lib/notes'
 import { notifyDataChanged } from '../lib/events'
@@ -29,13 +30,15 @@ export default function StudyPage() {
   const load = async () => {
     const [{ data: studyData }, { data: sessionData }] = await Promise.all([
       supabase.from('studies')
-        .select('id, name, corpus_id, resource_id, corpora(id, name), resources(id, name, outline)')
+        .select('id, name, corpus_id, resource_id, corpora(id, name), resources(id, name, outline, storage_path)')
         .eq('id', studyId)
         .single(),
       supabase.from('reading_sessions').select('*').eq('study_id', studyId).order('created_at'),
     ])
     setStudy(studyData)
     setSessions(sessionData ?? [])
+    // Its sessions all read this PDF: download it now so opening one is instant.
+    prefetchResourcePdf(studyData?.resources?.storage_path)
 
     const sessionIds = (sessionData ?? []).map(s => s.id)
     if (sessionIds.length > 0) {

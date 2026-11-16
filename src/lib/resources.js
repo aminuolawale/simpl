@@ -1,6 +1,7 @@
 import { uploadResource } from './storage'
 import { extractOutline } from './pdf'
 import { notifyDataChanged } from './events'
+import { putCachedPdf } from './pdfCache'
 
 // Uploads a PDF and creates a standalone resource row for it.
 export async function createResource(supabase, file) {
@@ -19,6 +20,8 @@ export async function createResource(supabase, file) {
     await supabase.storage.from('resources').remove([path])
     throw error
   }
+  // We already have the bytes, so opening it right after upload needs no download.
+  putCachedPdf(path, file)
   notifyDataChanged()
   return data
 }

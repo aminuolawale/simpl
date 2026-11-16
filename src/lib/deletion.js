@@ -6,6 +6,7 @@
 // Storage objects are not cascaded, so PDFs are removed explicitly.
 
 import { notifyDataChanged } from './events'
+import { deleteCachedPdf } from './pdfCache'
 
 const BUCKET = 'resources'
 
@@ -38,6 +39,7 @@ export async function deleteResource(supabase, resourceId) {
     .single()
   if (error) throw error
   await deleteRow(supabase, 'resources', 'id', resourceId)
+  if (data?.storage_path) deleteCachedPdf(data.storage_path)
   await removeFiles(supabase, [data?.storage_path])
 }
 

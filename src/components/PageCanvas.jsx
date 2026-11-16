@@ -7,7 +7,7 @@ import styles from './PageCanvas.module.css'
 // The scrolling page view. React only renders the empty page boxes (once per
 // document); drawing, sizing, scrolling and jumps are handled by the viewer.
 export default function PageCanvas() {
-  const { pdfDoc, docId, pageCount, scale, setCurrentPage, initialPage, status, retry, navigatorRef } = usePdf()
+  const { pdfDoc, docId, pageCount, scale, setCurrentPage, initialPage, status, retry, navigatorRef, markFirstDraw } = usePdf()
   const containerRef = useRef(null)
   const pagesRef = useRef([])
   const viewerRef = useRef(null)
@@ -23,6 +23,7 @@ export default function PageCanvas() {
       initialPage,
       scale: scaleRef.current,
       onPageChange: setCurrentPage,
+      onFirstDraw: markFirstDraw,
     })
     viewerRef.current = viewer
     navigatorRef.current = viewer.goTo

@@ -12,7 +12,7 @@ const MAX_CANVAS_PIXELS = 16 * 1024 * 1024 // caps memory at high zoom on dense 
 const CURRENT_PAGE_LINE = 0.3 // the page under this fraction of the viewport is "current"
 const SIZE_BATCH = 25 // pages measured per step of the background size pass
 
-export function createPdfViewer({ pdfDoc, container, pages, initialPage = 1, scale, onPageChange }) {
+export function createPdfViewer({ pdfDoc, container, pages, initialPage = 1, scale, onPageChange, onFirstDraw }) {
   const pageCount = pdfDoc.numPages
   let destroyed = false
   let currentScale = scale
@@ -181,6 +181,7 @@ export function createPdfViewer({ pdfDoc, container, pages, initialPage = 1, sca
       canvas = null
       drawnAt.set(n, drawScale)
       firstDrawDone()
+      onFirstDraw?.()
     } catch (e) {
       if (e?.name !== 'RenderingCancelledException' && !destroyed) {
         console.error(`Could not draw page ${n}`, e)

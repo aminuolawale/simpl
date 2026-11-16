@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { linkResource, unlinkResource } from '../lib/links'
 import { deleteResource, resourceDeleteMessage, plural } from '../lib/deletion'
 import { fmtSize, fmtDate } from '../lib/format'
+import { prefetchResourcePdf } from '../lib/pdfSource'
 import AppBar from '../components/AppBar'
 import ChooseModal from '../components/ChooseModal'
 import Section, { Empty } from '../components/Section'
@@ -27,7 +28,7 @@ export default function ResourcePage() {
       { data: linkData },
       { data: studyData },
     ] = await Promise.all([
-      supabase.from('resources').select('id, name, size_bytes, created_at, last_page').eq('id', id).single(),
+      supabase.from('resources').select('id, name, size_bytes, created_at, last_page, storage_path').eq('id', id).single(),
       supabase.from('corpus_resources').select('corpora(id, name)').eq('resource_id', id),
       supabase.from('studies')
         .select('id, name, corpora(name), reading_sessions(id, completed)')
@@ -71,7 +72,13 @@ export default function ResourcePage() {
         crumbs={[{ label: resource?.name }]}
         actions={
           <>
-            <Link to={`/resource/${id}/read`} className={styles.action}>
+            <Link
+              to={`/resource/${id}/read`}
+              className={styles.action}
+              // Start downloading as soon as the user heads for the button.
+              onMouseEnter={() => prefetchResourcePdf(resource?.storage_path)}
+              onFocus={() => prefetchResourcePdf(resource?.storage_path)}
+            >
               {resource?.last_page > 1 ? `Continue from p. ${resource.last_page}` : 'Open PDF'}
             </Link>
             <button className={styles.action} onClick={askDelete}>Delete PDF</button>
